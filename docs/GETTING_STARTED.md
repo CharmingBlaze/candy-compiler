@@ -23,8 +23,8 @@ Candy is written in Go. Download it from **https://go.dev/dl/** and run the inst
 ### Step 2 — Get the source
 
 ```bash
-git clone https://github.com/yourname/KGO.git
-cd KGO/compiler
+git clone https://github.com/CharmingBlaze/candy-compiler.git
+cd candy-compiler/compiler
 ```
 
 ### Step 3 — Build the Candy executable
@@ -51,7 +51,11 @@ println("Hello from Candy!")
 
 Run it:
 ```bash
+# macOS / Linux
 ./candy hello.candy
+
+# Windows PowerShell
+.\candy.exe hello.candy
 ```
 
 You should see `Hello from Candy!` printed. That's it — you're running Candy.
