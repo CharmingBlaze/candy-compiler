@@ -1,0 +1,29 @@
+// Demo: [CANDY_KID_EXTENDED] — seconds, deltaTime, touching, join, toNumber
+// From repo: cd compiler && go run -tags raylib ./cmd/candy ../examples/candy/kid_extended_sandbox.candy
+
+window(500, 400, "Extended sandbox")
+
+loop {
+  t = seconds()
+  dt = deltaTime()
+  clear("darkgray")
+  // Overlapping circles: centers 50px apart, radii 40 — should collide
+  hit = 0
+  if touching(50, 200, 40, 100, 200, 40) {
+    hit = 1
+  }
+  if hit == 1 {
+    circle(50, 200, 40, "green")
+    circle(100, 200, 40, "green")
+  } else {
+    circle(50, 200, 40, "gray")
+    circle(100, 200, 40, "red")
+  }
+  msg = join("t=", t, " dt=", dt)
+  text("Extended: " + msg, 10, 20, 18, "white")
+  n = toNumber("99")
+  if n == 99 {
+    text("toNumber(99) ok", 10, 360, 16, "yellow")
+  }
+  show()
+}

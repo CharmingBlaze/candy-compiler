@@ -1,0 +1,47 @@
+// Vec3 arithmetic benchmark scaffold for Candy optimization tracking.
+
+fun benchVec3Add() {
+    val ax = 1.0
+    val ay = 2.0
+    val az = 3.0
+
+    val bx = 4.0
+    val by = 5.0
+    val bz = 6.0
+
+    var sx = 0.0
+    var sy = 0.0
+    var sz = 0.0
+
+    for i = 0 to 1000000 {
+        sx = ax + bx
+        sy = ay + by
+        sz = az + bz
+    }
+
+    return sx + sy + sz
+}
+
+fun benchVec3NormalizeLike() {
+    var x = 3.0
+    var y = 4.0
+    var z = 5.0
+
+    for i = 0 to 1000000 {
+        val lenSq = x * x + y * y + z * z
+        // Placeholder for intrinsic path when sqrt fast-path lands.
+        // Keep stable arithmetic workload today.
+        val inv = 1.0 / lenSq
+        x = x * inv
+        y = y * inv
+        z = z * inv
+    }
+
+    return x + y + z
+}
+
+print("Vec3 Add Sum:")
+print(benchVec3Add())
+
+print("Vec3 Normalize-like Sum:")
+print(benchVec3NormalizeLike())

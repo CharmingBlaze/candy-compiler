@@ -1,0 +1,24 @@
+// Run from repo: go run ./cmd/candy scratch/bounce_raylib.candy
+// (First build compiles Raylib C sources — see docs/EXTENSIONS.md.)
+
+window(800, 600, "Bouncing ball")
+
+x = 400
+y = 300
+vx = 5
+vy = 3
+
+while !shouldClose() {
+    x = x + vx
+    y = y + vy
+    if x < 0 || x > 800 {
+        vx = -vx
+    }
+    if y < 0 || y > 600 {
+        vy = -vy
+    }
+    clear("navy")
+    circle(x, y, 20, "yellow")
+    text(10, 10, "Bouncing ball", "white")
+    flip()
+}

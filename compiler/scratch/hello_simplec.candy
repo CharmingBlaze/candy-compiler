@@ -1,0 +1,12 @@
+// SimpleC Level 1 (interpreter): dynamic variables, print, math, strings, structs.
+// Run: go run ./cmd/candy scratch/hello_simplec.candy
+
+name = "SimpleC"
+n = 6
+n = n + 1
+print n
+struct Point { x: int; y: int; }
+p = Point { x: 10, y: 20 }
+p.x = 99
+msg = "Hello, {name}! p.x={p.x}"
+print msg

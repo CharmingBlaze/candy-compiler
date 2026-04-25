@@ -1,0 +1,32 @@
+// Example 3 from docs/CANDY_KID.md — run with -tags raylib (see kid_clicker.candy header)
+
+window(800, 600, "Catch the Candy")
+
+playerX = 400
+candyX = random(0, 800)
+candyY = 0
+score = 0
+
+loop {
+  if key(LEFT) {
+    playerX = playerX - 5
+  }
+  if key(RIGHT) {
+    playerX = playerX + 5
+  }
+  candyY = candyY + 3
+  if candyY > 550 and candyX > playerX - 30 and candyX < playerX + 30 {
+    score = score + 1
+    candyY = 0
+    candyX = random(0, 800)
+  }
+  if candyY > 600 {
+    candyY = 0
+    candyX = random(0, 800)
+  }
+  clear(SKYBLUE)
+  box(playerX - 30, 550, 60, 20, BLUE)
+  circle(candyX, candyY, 10, PINK)
+  text("Score: " + score, 10, 10, 20, BLACK)
+  show()
+}

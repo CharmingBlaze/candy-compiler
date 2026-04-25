@@ -1,0 +1,6 @@
+bin/clang.exe
+bin/lld-link.exe
+bin/llvm-ar.exe
+bin/llvm-link.exe
+lib/*.lib
+lib/*.dll

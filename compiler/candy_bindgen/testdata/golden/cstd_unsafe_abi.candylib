@@ -1,0 +1,24 @@
+{
+  "library": "cstd",
+  "unsafe_abi": true,
+  "headers": [
+    "stdio.h"
+  ],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "externs": [
+    {
+      "name": "printf",
+      "symbol": "printf",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "fmt",
+          "type": "const char*"
+        }
+      ],
+      "variadic": true
+    }
+  ],
+  "compile": {},
+  "link": {}
+}

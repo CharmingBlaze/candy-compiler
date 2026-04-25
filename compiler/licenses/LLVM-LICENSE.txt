@@ -1,0 +1,7 @@
+LLVM is distributed under the Apache License v2.0 with LLVM Exceptions.
+
+This file is a placeholder in the repository to ensure release bundles include
+the LLVM license file when LLVM runtime/tooling is redistributed with Candy.
+
+Replace this placeholder with the exact LLVM license text from the bundled
+LLVM release before publishing production artifacts.

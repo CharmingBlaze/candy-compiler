@@ -1,0 +1,39 @@
+// spec_test.candy
+
+// 1. Variable with 'as'
+count as int = 10
+println("Count: {count}")
+
+// 2. Function with 'as'
+fun add(a as int, b as int) as int {
+    return a + b
+}
+println("10 + 5 = {add(10, 5)}")
+
+// 3. For each
+items = [1, 2, 3]
+for each i in items {
+    println("Item: {i}")
+}
+
+// 4. Ternary
+isOk = true
+status = isOk ? "Success" : "Failure"
+println("Status: {status}")
+
+// 5. Switch
+v = 2
+switch v {
+    case 1: { println("One") }
+    case 2: { println("Two") }
+    default: { println("Other") }
+}
+
+// 6. Stdlib aliases
+import random
+import time
+
+println("Random pick: {random.pick(items)}")
+println("Time now: {time.now()}")
+
+println("Done!")

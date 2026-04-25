@@ -1,0 +1,13 @@
+library: nuklear
+namespace: nk
+headers:
+  - nuklear.h
+  - nuklear_demo.c
+strip_prefixes:
+  - nk_
+language: c
+link_libs:
+  - user32
+  - gdi32
+smart: true
+simple: true

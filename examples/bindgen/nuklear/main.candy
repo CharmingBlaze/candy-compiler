@@ -1,0 +1,30 @@
+import "out/nuklear.candylib"
+
+ctx = nk_init()
+
+opened = nk_begin(ctx, "Candy Nuklear Demo", 20, 20, 320, 200)
+
+if opened == 1 {
+  clicked = nk_button_label(ctx, "Hello from Candy")
+  if clicked == 1 {
+    println("GUI event: button clicked")
+  }
+}
+
+nk_end(ctx)
+presses = nk_button_presses(ctx)
+println("press count = {presses}")
+
+// Simple GUI calculator flow: 12 + 7 = 19
+nk_calc_press_number(ctx, 1)
+nk_calc_press_number(ctx, 2)
+nk_calc_press_op(ctx, "+")
+nk_calc_press_number(ctx, 7)
+result = nk_calc_press_equals(ctx)
+display = nk_calc_display(ctx)
+println("calculator result = {result} (display={display})")
+
+nk_shutdown(ctx)
+
+println("Opening native calculator GUI window...")
+nk_run_calculator_gui()

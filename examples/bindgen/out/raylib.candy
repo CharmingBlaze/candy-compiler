@@ -1,0 +1,5 @@
+// generated helper stubs (optional)
+import "raylib.candylib"
+
+extern fun add(a: int, b: int): int { }
+extern fun version(): string { }

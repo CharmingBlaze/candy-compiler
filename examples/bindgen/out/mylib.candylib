@@ -1,0 +1,31 @@
+{
+  "library": "mylib",
+  "headers": [
+    "C:\\Users\\rain\\Documents\\GO\\KGO\\examples\\bindgen\\mylib.h"
+  ],
+  "generated_at": "2026-04-25T10:15:40Z",
+  "externs": [
+    {
+      "name": "add",
+      "symbol": "add",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "a",
+          "type": "int"
+        },
+        {
+          "name": "b",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "version",
+      "symbol": "version",
+      "return_type": "const char*"
+    }
+  ],
+  "compile": {},
+  "link": {}
+}

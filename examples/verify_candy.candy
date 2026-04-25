@@ -1,0 +1,54 @@
+// CANDY Language Specification Verification Script
+
+// 1. Basic Output & Math
+println("--- Basic Math & Output ---")
+sum = 10 + 20 * 2
+println("10 + 20 * 2 = " + sum)
+
+// 2. Logic & Conditions
+println("--- Logic & Conditions ---")
+sweet = true
+tasty = true
+if (sweet && tasty) {
+  println("Perfect candy!")
+}
+
+// 3. Functions & Multiple Return Values
+println("--- Functions & Tuples ---")
+fun getPos(): (float, float, float) {
+  return (1.5, 2.5, 3.5)
+}
+
+x, y, z = getPos()
+println("Position: " + x + ", " + y + ", " + z)
+
+// 4. Classes & Primary Constructors
+println("--- Classes ---")
+class CandyBar(name: String, flavor: String) {
+  fun describe() {
+    println("This is a " + name + " with " + flavor + " flavor.")
+  }
+}
+
+myCandy = CandyBar("Snickers", "Peanut")
+myCandy.describe()
+
+// 5. Loops & Control Flow
+println("--- Loops ---")
+foreach (i in [1, 2, 3, 4, 5]) {
+  if (i == 3) {
+    continue
+  }
+  if (i == 5) {
+    break
+  }
+  println("Item: " + i)
+}
+
+// 6. Memory Management (Manual cleanup)
+println("--- Memory ---")
+trash = CandyBar("Trash", "Bitter")
+delete(trash)
+println("Trash deleted (reference nulled)")
+
+println("Verification Complete!")

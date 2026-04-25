@@ -1,0 +1,17 @@
+// generated helper stubs (optional)
+import "nuklear.candylib"
+
+extern fun nk_init(): int { }
+extern fun nk_begin(ctx: int, title: string, x: int, y: int, w: int, h: int): int { }
+extern fun nk_button_label(ctx: int, label: string): int { }
+extern fun nk_end(ctx: int): void { }
+extern fun nk_shutdown(ctx: int): void { }
+extern fun nk_button_presses(ctx: int): int { }
+extern fun nk_calc_press_number(ctx: int, n: int): int { }
+extern fun nk_calc_press_op(ctx: int, op: string): int { }
+extern fun nk_calc_press_equals(ctx: int): int { }
+extern fun nk_calc_display(ctx: int): int { }
+extern fun nk_wait_for_enter(): void { }
+extern fun nk_run_calculator_gui(): void { }
+extern fun nk_NkCalcWndProc(hwnd: int, msg: int, wParam: int, lParam: int): int { }
+extern fun nk_DefWindowProcA(arg1: int, arg2: int, arg3: int, arg4: int): int { }

@@ -1,0 +1,92 @@
+name: release-bundle
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build candy
+        run: |
+          go build -o candy${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/candy
+          go build -o candywrap${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/candywrap
+          go build -o sweet${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/sweet
+
+      - name: Prepare fake llvm (non-windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p llvm/bin llvm/lib
+          cat > llvm/bin/clang <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cp "$1" "$3"
+          EOF
+          chmod +x llvm/bin/clang
+          touch llvm/lib/libx.so
+          cat > /tmp/manifest.txt <<'EOF'
+          bin/clang
+          lib/*.so*
+          EOF
+
+      - name: Prepare fake llvm (windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path llvm\bin -Force | Out-Null
+          New-Item -ItemType Directory -Path llvm\lib -Force | Out-Null
+          Copy-Item C:\Windows\System32\where.exe llvm\bin\clang.exe -Force
+          New-Item -ItemType File -Path llvm\lib\x.dll -Force | Out-Null
+          @"
+          bin/clang.exe
+          lib/*.dll
+          "@ | Out-File -FilePath $env:TEMP\manifest.txt -Encoding ascii
+
+      - name: Bundle (non-windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CANDY_LLVM_MANIFEST: /tmp/manifest.txt
+        run: |
+          bash scripts/bundle-llvm.sh ./candy ./candywrap ./llvm ./dist
+          cp ./sweet ./dist/sweet
+          test -f ./dist/bin/candy
+          test -f ./dist/bin/candywrap
+          test -f ./dist/sweet
+          test -f ./dist/toolchain/bin/clang
+
+      - name: Bundle (windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:CANDY_LLVM_MANIFEST = "$env:TEMP\manifest.txt"
+          ./scripts/bundle-llvm.ps1 -CandyBinary ./candy.exe -CandywrapBinary ./candywrap.exe -LlvmRoot ./llvm -OutDir ./dist
+          Copy-Item ./sweet.exe ./dist/sweet.exe -Force
+          if (!(Test-Path ./dist/bin/candy.exe)) { throw "missing candy.exe" }
+          if (!(Test-Path ./dist/bin/candywrap.exe)) { throw "missing candywrap.exe" }
+          if (!(Test-Path ./dist/sweet.exe)) { throw "missing sweet.exe" }
+          if (!(Test-Path ./dist/toolchain/bin/clang.exe)) { throw "missing clang.exe" }
+
+      - name: Smoke candy build (non-windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cat > ./dist/sample.candy <<'EOF'
+          return 1+2;
+          EOF
+          (cd ./dist && ./bin/candy build sample.candy)
+          test -f ./dist/sample.ll

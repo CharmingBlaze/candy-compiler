@@ -1,0 +1,27 @@
+print("ENET client demo (fallback-compatible)")
+enet.init()
+
+serverAddr = enet.address("127.0.0.1", 19200)
+client = enet.host_create(null, 32, 2, 0, 0)
+peer = enet.host_connect(client, serverAddr, 1, 0)
+
+pkt = enet.packet_create("hello from client", enet.PACKET_RELIABLE)
+enet.peer_send(peer, 0, pkt)
+enet.packet_destroy(pkt)
+
+for i in 0..2 {
+    ev = enet.host_service(client, 100)
+    if ev["type"] == enet.EVENT_CONNECT {
+        print("connected to server")
+    } else if ev["type"] == enet.EVENT_DISCONNECT {
+        print("disconnected")
+    } else if ev["type"] == enet.EVENT_RECEIVE {
+        print("received: {ev[\"packet\"][\"data\"]}")
+    }
+}
+
+enet.peer_disconnect_now(peer, 0)
+enet.host_destroy(client)
+enet.deinit()
+print("client done")
+

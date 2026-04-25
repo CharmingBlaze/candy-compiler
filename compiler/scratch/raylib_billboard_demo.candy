@@ -1,0 +1,26 @@
+window(1000, 700, "Raylib Billboard Demo")
+setTargetFPS(60)
+
+// Replace this with a real texture in your project.
+tex = loadTexture("assets/player.png")
+spin = 0
+
+while !shouldClose() {
+    spin = spin + 70 * getFrameTime()
+    clear("black")
+
+    beginMode3D(5, 4, 7, 0, 1, 0, 45)
+    drawGrid(20, 1)
+
+    drawBillboard(tex, -2, 1.2, 0, 1.6, "white")
+    drawBillboardRec(tex, 0, 0, 64, 64, 0, 1.2, 0, 1.8, 1.8, "white")
+    drawBillboardPro(tex, 0, 0, 64, 64, 2, 1.2, 0, 0, 1, 0, 2.0, 2.0, 1.0, 1.0, spin, "white")
+
+    endMode3D()
+
+    drawText(16, 16, "Billboard demo (update texture path if needed)", 20, "yellow")
+    flip()
+}
+
+unloadTexture(tex)
+closeWindow()

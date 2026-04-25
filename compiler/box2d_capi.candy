@@ -1,0 +1,7 @@
+// generated helper stubs (optional)
+import "box2d_capi.candylib"
+
+extern fun b2World_Create(gx: float, gy: float): int { }
+extern fun b2World_Destroy(world: int): void { }
+extern fun b2World_CreateBody(world: int, x: float, y: float): int { }
+extern fun b2Body_Destroy(body: int): void { }

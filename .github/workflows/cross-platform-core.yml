@@ -1,0 +1,46 @@
+name: cross-platform-core
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: compiler
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: compiler/go.mod
+
+      - name: Build candy tools
+        run: |
+          go build ./cmd/candy
+          go build ./cmd/candywrap
+          go build ./cmd/sweet
+
+      - name: Verify bindgen golden outputs
+        run: |
+          go test ./candy_bindgen -run TestGolden_
+
+      - name: Run focused tests
+        run: |
+          go test ./candy_bindgen ./candy_load ./cmd/candy ./cmd/candywrap ./cmd/sweet
+
+      - name: Generate sample bindings
+        run: |
+          go run ./cmd/candywrap wrap --name mylib --output ../examples/bindgen/out ../examples/bindgen/mylib.h
+
+      - name: Build sample with generated candylib
+        run: |
+          go run ./cmd/candy build ../examples/bindgen/main.candy -o ../examples/bindgen/out/sample_app

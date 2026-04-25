@@ -1,0 +1,43 @@
+// Example: candy shop inventory (console)
+
+class CandyBar(name: string, flavor: string, calories: int) {
+    fun getInfo(): string {
+        return name + " - " + flavor + " flavor (" + calories + " cal)"
+    }
+    fun unwrap() {
+        println("Unwrapping " + name + "!")
+    }
+}
+
+class CandyShop {
+    var inventory = []
+
+    fun addCandy(candy) {
+        inventory.append(candy)
+        println("Added " + candy.name + " to inventory!")
+    }
+
+    fun sellCandy(index: int) {
+        if index >= 0 && index < inventory.length {
+            sold = inventory[index]
+            inventory.remove_at(index)
+            println("Sold " + sold.name + "!")
+            return sold
+        }
+        return null
+    }
+
+    fun listInventory() {
+        println("=== Candy Shop Inventory ===")
+        foreach (candy in inventory) {
+            println(candy.getInfo())
+        }
+    }
+}
+
+shop = CandyShop()
+shop.addCandy(CandyBar("Milky Way", "Chocolate Caramel", 240))
+shop.addCandy(CandyBar("Sour Patch Kids", "Sour Gummy", 150))
+shop.listInventory()
+shop.sellCandy(0)
+shop.listInventory()

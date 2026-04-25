@@ -1,0 +1,10 @@
+print("Counting 1 to 5:")
+for i = 1 to 5 {
+  print(i)
+}
+
+print("Iterating list:")
+candies = ["Chocolate", "Gummy", "Lollipop"]
+for candy in candies {
+  print("Yum: " + candy)
+}

@@ -1,0 +1,4 @@
+scores = [10, 20, 30]
+print("Count: " + scores.count)
+print("Length: " + scores.length)
+print("Len: " + scores.len)

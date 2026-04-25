@@ -1,0 +1,10 @@
+// MyGame - A Candy Game
+window(800, 600, "MyGame")
+
+while !shouldClose() {
+    clear("black")
+    text(20, 20, "Welcome to MyGame!", "white")
+    flip()
+}
+
+closeWindow()

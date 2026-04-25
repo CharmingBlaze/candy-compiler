@@ -1,0 +1,48 @@
+// CANDY Spec Verification Test
+
+// 1. Enums
+enum Sweetness {
+  MILD,
+  MEDIUM,
+  EXTRA_SWEET
+}
+println("Sweetness.EXTRA_SWEET = " + Sweetness.EXTRA_SWEET)
+
+// 2. Class with explicit properties and default values
+class Entity {
+  x: float = 10.0
+  y: float = 20.0
+  z: float = 30.0
+  
+  fun pos() {
+    println("Pos: " + x + ", " + y + ", " + z)
+  }
+}
+
+e = new Entity()
+e.pos()
+
+// 3. Switch statement
+flavor = "CHOCOLATE"
+switch (flavor) {
+  case "CHOCOLATE":
+    println("Yum! Chocolate")
+    break
+  case "VANILLA":
+    println("Vanilla is okay")
+    break
+  default:
+    println("Mystery flavor")
+}
+
+// 4. Array methods
+jar = ["Skittles", "M&Ms"]
+jar.append("Twix")
+println("Jar length: " + jar.length)
+foreach (c in jar) {
+  println("Candy: " + c)
+}
+
+// 5. Explicit type declarations
+sugar: int = 100
+println("Sugar level: " + sugar)

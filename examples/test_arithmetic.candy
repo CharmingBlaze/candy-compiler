@@ -1,0 +1,21 @@
+// Arithmetic Operators Test
+x = 10
+y = 3
+
+println("Addition: " + (x + y))        // 13
+println("Subtraction: " + (x - y))     // 7
+println("Multiplication: " + (x * y))  // 30
+println("Division: " + (x / y))        // 3
+println("Modulus: " + (x % y))         // 1
+
+++x
+println("After ++x: " + x)             // 11
+
+--x
+println("After --x: " + x)             // 10
+
+f = 10.5
+++f
+println("After ++f: " + f)             // 11.5
+
+println("Modulus float: " + (10.5 % 3.0)) // 1.5

@@ -1,0 +1,31 @@
+// [CANDY_KID_EXTENDED] every(interval, fn) and after(delay, fn) — pass a named fun; timers advance when you end a frame (show/flip).
+// From repo: cd compiler && go run -tags raylib ./cmd/candy ../examples/candy/kid_every_after.candy
+
+window(480, 220, "Every and after")
+
+ticks = 0
+ready = 0
+
+fun onEvery() {
+  ticks = ticks + 1
+}
+
+fun onAfter() {
+  ready = 1
+}
+
+after(0.5, onAfter)
+every(2.0, onEvery)
+
+loop {
+  clear("midnightblue")
+  text("every(2s) bumps count; after(0.5s) sets ready. show() runs the timer tick.", 10, 8, 14, "lightgray")
+  text(join("every count: ", ticks), 10, 40, 22, "white")
+  if ready == 1 {
+    text("after(0.5) fired", 10, 78, 18, "lime")
+  } else {
+    text("after(0.5) waiting...", 10, 78, 18, "gray")
+  }
+  text(join("seconds: ", seconds()), 10, 120, 14, "yellow")
+  show()
+}

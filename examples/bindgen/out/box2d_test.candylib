@@ -1,0 +1,84 @@
+{
+  "library": "box2d_test",
+  "namespace": "box2d",
+  "headers": [
+    "c:\\Users\\rain\\Documents\\GO\\KGO\\examples\\bindgen\\box2d\\box2d_capi.h"
+  ],
+  "generated_at": "2026-04-25T11:04:44Z",
+  "externs": [
+    {
+      "name": "box2d_Create",
+      "symbol": "b2World_Create",
+      "return_type": "b2WorldId",
+      "params": [
+        {
+          "name": "gx",
+          "type": "float"
+        },
+        {
+          "name": "gy",
+          "type": "float"
+        }
+      ]
+    },
+    {
+      "name": "box2d_Destroy",
+      "symbol": "b2World_Destroy",
+      "return_type": "void",
+      "params": [
+        {
+          "name": "world",
+          "type": "b2WorldId"
+        }
+      ]
+    },
+    {
+      "name": "box2d_CreateBody",
+      "symbol": "b2World_CreateBody",
+      "return_type": "b2BodyId",
+      "params": [
+        {
+          "name": "world",
+          "type": "b2WorldId"
+        },
+        {
+          "name": "x",
+          "type": "float"
+        },
+        {
+          "name": "y",
+          "type": "float"
+        }
+      ]
+    },
+    {
+      "name": "box2d_b2Body_Destroy",
+      "symbol": "b2Body_Destroy",
+      "return_type": "void",
+      "params": [
+        {
+          "name": "body",
+          "type": "b2BodyId"
+        }
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "b2WorldId",
+      "c_type": "struct b2World*",
+      "candy_type": "int"
+    },
+    {
+      "name": "b2BodyId",
+      "c_type": "struct b2Body*",
+      "candy_type": "int"
+    }
+  ],
+  "compile": {
+    "include_dirs": [
+      "c:\\Users\\rain\\Documents\\GO\\KGO\\examples\\bindgen\\box2d"
+    ]
+  },
+  "link": {}
+}

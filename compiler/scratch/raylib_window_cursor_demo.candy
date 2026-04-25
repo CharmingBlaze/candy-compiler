@@ -1,0 +1,50 @@
+window(1000, 640, "Raylib Window + Cursor Demo")
+setTargetFPS(60)
+
+showCursor()
+stateToggle = 0
+
+while !shouldClose() {
+    clear("black")
+
+    drawText(16, 16, "Window + cursor state demo", 26, "white")
+    drawText(16, 52, "screen={getScreenWidth()}x{getScreenHeight()} render={getRenderWidth()}x{getRenderHeight()}", 18, "gray")
+    drawText(16, 76, "monitorCount={getMonitorCount()} current={getCurrentMonitor()} name={getMonitorName(getCurrentMonitor())}", 18, "gray")
+    drawText(16, 100, "windowPos={getWindowPosition().x},{getWindowPosition().y} dpi={getWindowScaleDPI().x},{getWindowScaleDPI().y}", 18, "gray")
+    drawText(16, 124, "flags: focused={isWindowFocused()} minimized={isWindowMinimized()} maximized={isWindowMaximized()} hidden={isWindowHidden()}", 18, "gray")
+    drawText(16, 148, "cursor: hidden={isCursorHidden()} onScreen={isCursorOnScreen()} mouse={getMouseX()},{getMouseY()}", 18, "gray")
+    drawText(16, 180, "Controls: [A] hide/show cursor, [W] borderless, [S] fullscreen", 18, "yellow")
+    drawText(16, 204, "          [D] minimize, [F1] maximize, [F2] restore, [F3] toggle vsync", 18, "yellow")
+    drawText(16, 228, "          [F4] toggle event waiting mode", 18, "yellow")
+
+    if isKeyPressed("a") {
+        if isCursorHidden() {
+            showCursor()
+            enableCursor()
+        } else {
+            hideCursor()
+            disableCursor()
+        }
+    }
+    if isKeyPressed("w") { toggleBorderlessWindowed() }
+    if isKeyPressed("s") { toggleFullscreen() }
+    if isKeyPressed("d") { minimizeWindow() }
+    if isKeyPressed("f1") { maximizeWindow() }
+    if isKeyPressed("f2") { restoreWindow() }
+    if isKeyPressed("f3") {
+        if isWindowState("vsync") { clearWindowState("vsync") } else { setWindowState("vsync") }
+    }
+    if isKeyPressed("f4") {
+        if stateToggle == 0 {
+            enableEventWaiting()
+            stateToggle = 1
+        } else {
+            disableEventWaiting()
+            stateToggle = 0
+        }
+    }
+
+    flip()
+}
+
+closeWindow()

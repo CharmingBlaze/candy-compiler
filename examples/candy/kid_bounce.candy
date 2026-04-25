@@ -1,0 +1,22 @@
+// Example 4 from docs/CANDY_KID.md — run with -tags raylib (see kid_clicker.candy header)
+
+window(800, 600, "Bouncing Ball")
+
+x = 400
+y = 300
+speedX = 5
+speedY = 3
+
+loop {
+  x = x + speedX
+  y = y + speedY
+  if x < 0 or x > 800 {
+    speedX = speedX * -1
+  }
+  if y < 0 or y > 600 {
+    speedY = speedY * -1
+  }
+  clear(WHITE)
+  circle(x, y, 20, RED)
+  show()
+}

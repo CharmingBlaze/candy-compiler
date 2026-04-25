@@ -1,0 +1,6 @@
+val name = "Antigravity";
+val version = 1;
+println("Hello, ${name}! You are version ${version}.");
+val x = 10;
+val y = 20;
+println("The sum of ${x} and ${y} is ${x + y}.");

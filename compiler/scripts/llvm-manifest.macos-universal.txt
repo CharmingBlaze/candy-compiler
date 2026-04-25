@@ -1,0 +1,6 @@
+bin/clang
+bin/ld64.lld
+bin/llvm-ar
+bin/llvm-link
+lib/*.a
+lib/*.dylib

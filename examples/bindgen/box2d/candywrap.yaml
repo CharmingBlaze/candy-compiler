@@ -1,0 +1,15 @@
+library: box2d
+namespace: box2d
+headers:
+  - box2d_capi.h
+strip_prefixes:
+  - b2World_
+  - b2Body_
+ignore:
+  - b2Internal_.*
+language: c
+static_link: false
+static_libs:
+  - box2d
+smart: true
+simple: true

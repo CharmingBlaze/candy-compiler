@@ -1,0 +1,38 @@
+{
+  "library": "demo",
+  "namespace": "demo",
+  "headers": [
+    "demo.h"
+  ],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "externs": [
+    {
+      "name": "demo_add",
+      "symbol": "demo_add",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "a",
+          "type": "int"
+        },
+        {
+          "name": "b",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "demo_print",
+      "symbol": "demo_print",
+      "return_type": "void",
+      "params": [
+        {
+          "name": "message",
+          "type": "const char*"
+        }
+      ]
+    }
+  ],
+  "compile": {},
+  "link": {}
+}

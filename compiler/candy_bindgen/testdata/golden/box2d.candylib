@@ -1,0 +1,27 @@
+{
+  "library": "box2d",
+  "namespace": "box2d",
+  "headers": [
+    "box2d.h"
+  ],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "externs": [
+    {
+      "name": "box2d_Create",
+      "symbol": "b2World_Create",
+      "return_type": "int"
+    },
+    {
+      "name": "box2d_b2Body_Create",
+      "symbol": "b2Body_Create",
+      "return_type": "int"
+    },
+    {
+      "name": "box2d_end",
+      "symbol": "b2World_end",
+      "return_type": "void"
+    }
+  ],
+  "compile": {},
+  "link": {}
+}

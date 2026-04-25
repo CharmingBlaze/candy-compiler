@@ -1,0 +1,4 @@
+val x = 5;
+val y = 10;
+val z: Int = "not an int";
+return z;

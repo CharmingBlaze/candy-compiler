@@ -1,0 +1,27 @@
+window(900, 500, "Raylib Audio Demo")
+setTargetFPS(60)
+initAudioDevice()
+
+// Replace with real audio files.
+snd = loadSound("assets/hit.wav")
+mus = loadMusicStream("assets/music.ogg")
+playMusicStream(mus)
+
+while !shouldClose() {
+    updateMusicStream(mus)
+
+    if isKeyPressed("space") {
+        playSound(snd)
+    }
+
+    clear("black")
+    drawText(20, 20, "SPACE: play sound", 24, "white")
+    drawText(20, 52, "Music stream updating every frame", 20, "gray")
+    flip()
+}
+
+stopMusicStream(mus)
+unloadMusicStream(mus)
+unloadSound(snd)
+closeAudioDevice()
+closeWindow()

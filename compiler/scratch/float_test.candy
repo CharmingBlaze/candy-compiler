@@ -1,0 +1,4 @@
+val x = 10;
+val y = 2.5;
+val z = x + y;
+return z * 2;

@@ -1,0 +1,108 @@
+// physics_demo.candy
+// Demonstrates the Candy pure-Go 3D physics engine with Raylib rendering.
+// Falling spheres and boxes land on a static ground plane.
+
+window(800, 600, "Candy Physics Demo")
+setTargetFPS(60)
+
+// Create a physics world with default gravity (0, -9.81, 0)
+let world = physicsCreateWorld(0, -9.81, 0)
+
+// Static ground plane at y=0
+let ground = physicsCreatePlane(world, 0)
+
+// Static walls (boxes) — motion type 0 = PHYSICS_STATIC
+let wallL = physicsCreateBox(world, -12, 5, 0,  0.5, 10, 10, 0)
+let wallR = physicsCreateBox(world,  12, 5, 0,  0.5, 10, 10, 0)
+
+// Drop a stack of dynamic boxes
+let boxes = []
+let i = 0
+while i < 8 {
+    let bx = physicsCreateBox(world, (i - 4) * 2.5, 10 + i * 2.5, 0,  1, 1, 1)
+    physicsSetRestitution(world, bx, 0.4)
+    physicsSetFriction(world, bx, 0.6)
+    boxes = boxes + [bx]
+    i = i + 1
+}
+
+// Drop some spheres
+let spheres = []
+let j = 0
+while j < 5 {
+    let sx = physicsCreateSphere(world, (j - 2) * 3, 15 + j * 1.5, 0,  0.8)
+    physicsSetRestitution(world, sx, 0.7)
+    physicsSetFriction(world, sx, 0.3)
+    spheres = spheres + [sx]
+    j = j + 1
+}
+
+// One large bouncy sphere launched sideways
+let ball = physicsCreateSphere(world, -10, 5, 0,  1.2)
+physicsSetRestitution(world, ball, 0.9)
+physicsSetFriction(world, ball, 0.1)
+physicsApplyImpulse(world, ball, 18, 8, 0)
+
+let frame = 0
+
+while !shouldClose() {
+    let dt = getFrameTime()
+
+    // Step physics (clamp dt to avoid spiral of death on slow frames)
+    if dt > 0.05 { dt = 0.05 }
+    physicsStep(world, dt)
+
+    frame = frame + 1
+
+    // Every 3 seconds drop a new box from above
+    if frame % 180 == 0 {
+        let nb = physicsCreateBox(world, 0, 20, 0,  1, 1, 1)
+        physicsSetRestitution(world, nb, 0.5)
+        boxes = boxes + [nb]
+    }
+
+    clear("skyblue")
+
+    beginMode3D(0, 15, 25,  0, 0, 0,  45)
+
+        drawGrid(30, 1)
+
+        // Draw ground plane as a thin flat box for visibility
+        drawCube(0, -0.1, 0, 24, 0.2, 20, "darkgray")
+
+        // Draw walls
+        drawCube(-12, 5, 0, 1, 10, 10, "gray")
+        drawCube( 12, 5, 0, 1, 10, 10, "gray")
+
+        // Draw boxes
+        let bi = 0
+        while bi < len(boxes) {
+            let p = physicsGetPosition(world, boxes[bi])
+            drawCube(p.x, p.y, p.z, 2, 2, 2, "red")
+            drawCubeWires(p.x, p.y, p.z, 2, 2, 2, "maroon")
+            bi = bi + 1
+        }
+
+        // Draw spheres
+        let si = 0
+        while si < len(spheres) {
+            let p = physicsGetPosition(world, spheres[si])
+            drawSphere(p.x, p.y, p.z, 0.8, "orange")
+            si = si + 1
+        }
+
+        // Draw the big ball
+        let bp = physicsGetPosition(world, ball)
+        drawSphere(bp.x, bp.y, bp.z, 1.2, "yellow")
+
+    endMode3D()
+
+    drawText(10, 10, "Candy Physics Demo", 20, "black")
+    drawText(10, 34, "Pure-Go physics — Windows, macOS, Linux", 16, "darkgray")
+    drawFPS(10, 55)
+
+    flip()
+}
+
+physicsDestroyWorld(world)
+closeWindow()

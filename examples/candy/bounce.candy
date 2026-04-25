@@ -1,0 +1,25 @@
+// bounce.candy - Test Raylib integration (older style: while + flip, not loop + show)
+
+window(800, 600, "Bounce Test")
+
+x = 400
+y = 300
+vx = 5
+vy = 3
+
+while not shouldClose() {
+    // Update
+    x = x + vx
+    y = y + vy
+    
+    if x < 0 or x > 800 { vx = -vx }
+    if y < 0 or y > 600 { vy = -vy }
+    
+    // Render
+    clear("navy")
+    circle(x, y, 20, "yellow")
+    text(10, 10, "Bouncing Ball", "white")
+    flip()
+    
+    sleep(16)
+}

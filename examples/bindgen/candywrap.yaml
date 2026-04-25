@@ -1,0 +1,10 @@
+library: mylib
+headers:
+  - ./mylib.h
+includes:
+  - ./include
+defines:
+  - MYLIB_VERSION=1
+profile: ""
+smart: true
+simple: false

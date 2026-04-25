@@ -1,0 +1,4 @@
+import "out/mylib.candylib"
+
+sum = add(10, 32)
+println("add(10,32) = {sum}")

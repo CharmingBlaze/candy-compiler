@@ -1,0 +1,31 @@
+window(1000, 700, "Raylib 3D Demo")
+setTargetFPS(60)
+
+angle = 0
+
+while !shouldClose() {
+    angle = angle + 50 * getFrameTime()
+
+    clear("black")
+
+    beginMode3D(6, 6, 6, 0, 1, 0, 45)
+    drawGrid(20, 1)
+    drawCube(0, 1, 0, 2, 2, 2, "red")
+    drawCubeWires(0, 1, 0, 2, 2, 2, "white")
+    drawBoundingBox(-1, 0, -1, 1, 2, 1, "lime")
+    drawCube(3, 0.5, 2, 1, 1, 1, "green")
+    drawSphereEx(0, 1, 3, 0.75, 12, 24, "blue")
+    drawCylinderEx(2.5, 0, -2.5, 3.5, 2.2, -2.5, 0.45, 0.2, 16, "gold")
+    drawCylinderWires(-3, 1, 0, 0.6, 0.4, 2.0, 16, "yellow")
+    drawCapsule(-1.5, 0.3, -2, -1.5, 2.1, -2, 0.35, 8, 8, "sky")
+    drawCapsuleWires(1.5, 0.3, -2, 1.5, 2.1, -2, 0.35, 8, 8, "white")
+    drawLine3D(-4, 0, -4, 4, 0, 4, "orange")
+    drawRay(0, 1.5, 0, 0.8, 0.2, 0.8, "maroon")
+    endMode3D()
+
+    drawText(16, 16, "Simple 3D mode", 24, "white")
+    drawText(16, 44, "time={getTime()} fps={getFPS()}", 18, "gray")
+    flip()
+}
+
+closeWindow()

@@ -1,0 +1,18 @@
+window(900, 600, "Raylib Text Demo")
+setTargetFPS(60)
+
+msg = "Candy + Raylib text"
+size = 36
+
+while !shouldClose() {
+    w = measureText(msg, size)
+    cx = (getScreenWidth() - w) / 2
+
+    clear("black")
+    drawText(cx, 240, msg, size, "white")
+    drawText(24, 24, "measureText() centers this line", 20, "green")
+    drawText(24, 52, "Frame time: {getFrameTime()}", 18, "gray")
+    flip()
+}
+
+closeWindow()

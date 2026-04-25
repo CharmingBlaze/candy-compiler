@@ -1,0 +1,36 @@
+window(800, 600, "Candy Catch!")
+playerX = 400
+score = 0
+candyX = random(50, 750)
+candyY = 0
+
+loop {
+  clear(SKYBLUE)
+  
+  // Move player
+  if key(LEFT) { playerX = playerX - 5 }
+  if key(RIGHT) { playerX = playerX + 5 }
+  
+  // Move candy
+  candyY = candyY + 3
+  
+  // Catch candy?
+  if candyY > 550 and candyX > playerX - 30 and candyX < playerX + 30 {
+    score = score + 1
+    candyY = 0
+    candyX = random(50, 750)
+  }
+  
+  // Missed?
+  if candyY > 600 {
+    candyY = 0
+    candyX = random(50, 750)
+  }
+  
+  // Draw stuff
+  box(playerX - 25, 550, 50, 20, BROWN)
+  circle(candyX, candyY, 15, RED)
+  text("Score: " + score, 10, 10, 20, WHITE)
+  
+  show()
+}

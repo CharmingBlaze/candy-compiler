@@ -1,0 +1,23 @@
+// Example 1 from docs/CANDY_KID.md
+// From repo: cd compiler && go run -tags raylib ./cmd/candy ../examples/candy/kid_moving_ball.candy
+
+window(800, 600, "Moving Ball")
+x = 400
+y = 300
+loop {
+  if key(LEFT) {
+    x = x - 5
+  }
+  if key(RIGHT) {
+    x = x + 5
+  }
+  if key(UP) {
+    y = y - 5
+  }
+  if key(DOWN) {
+    y = y + 5
+  }
+  clear(WHITE)
+  circle(x, y, 25, RED)
+  show()
+}

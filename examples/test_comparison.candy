@@ -1,0 +1,13 @@
+// Comparison Operators Test
+x = 10
+y = 5
+
+println("10 == 5: " + (x == y))   // false
+println("10 != 5: " + (x != y))   // true
+println("10 > 5: " + (x > y))     // true
+println("10 < 5: " + (x < y))     // false
+println("10 >= 5: " + (x >= y))   // true
+println("10 <= 5: " + (x <= y))   // false
+
+println("10.5 > 10.4: " + (10.5 > 10.4)) // true
+println("10 == 10.0: " + (10 == 10.0))   // true

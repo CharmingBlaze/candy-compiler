@@ -1,0 +1,7 @@
+import "out/box2d.candylib"
+
+// Generated names are namespace-prefixed.
+// Example externs after wrapping:
+// - box2d_Create(gx, gy)
+// - box2d_Destroy(world)
+// - box2d_CreateBody(world, x, y)

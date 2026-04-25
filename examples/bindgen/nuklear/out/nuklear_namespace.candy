@@ -1,0 +1,59 @@
+// generated namespace convenience wrappers
+import "nuklear.candylib"
+
+fun init(): int {
+  return nk_init()
+}
+
+fun begin(ctx: int, title: string, x: int, y: int, w: int, h: int): int {
+  return nk_begin(ctx, title, x, y, w, h)
+}
+
+fun button_label(ctx: int, label: string): int {
+  return nk_button_label(ctx, label)
+}
+
+fun nk_wrap_nk_end(ctx: int) {
+  nk_end(ctx)
+}
+
+fun shutdown(ctx: int) {
+  nk_shutdown(ctx)
+}
+
+fun button_presses(ctx: int): int {
+  return nk_button_presses(ctx)
+}
+
+fun calc_press_number(ctx: int, n: int): int {
+  return nk_calc_press_number(ctx, n)
+}
+
+fun calc_press_op(ctx: int, op: string): int {
+  return nk_calc_press_op(ctx, op)
+}
+
+fun calc_press_equals(ctx: int): int {
+  return nk_calc_press_equals(ctx)
+}
+
+fun calc_display(ctx: int): int {
+  return nk_calc_display(ctx)
+}
+
+fun wait_for_enter() {
+  nk_wait_for_enter()
+}
+
+fun run_calculator_gui() {
+  nk_run_calculator_gui()
+}
+
+fun NkCalcWndProc(hwnd: int, msg: int, wParam: int, lParam: int): int {
+  return nk_NkCalcWndProc(hwnd, msg, wParam, lParam)
+}
+
+fun DefWindowProcA(arg1: int, arg2: int, arg3: int, arg4: int): int {
+  return nk_DefWindowProcA(arg1, arg2, arg3, arg4)
+}
+

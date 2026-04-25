@@ -1,0 +1,9 @@
+println("Hello from KGO Native!");
+println(42);
+println(3.14159);
+val x = 10;
+val y = 20;
+if (x < y) {
+  println("Comparison works!");
+};
+return 0;

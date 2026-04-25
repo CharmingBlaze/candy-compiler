@@ -1,0 +1,24 @@
+// Example: candy crusher game loop (interactive)
+
+fun candyCrusherDemo() {
+    score = 0
+    candiesLeft = 50
+    while (candiesLeft > 0) {
+        println("Candies left: " + candiesLeft)
+        println("Crush candy? Enter 1 for yes, 0 for no")
+        input = readLine()
+        choice = parseInt(input)
+        if (choice == 1) {
+            points = rand(10, 50)
+            score = score + points
+            println("Crushed! +" + points + " points. Sugar rush!")
+        } else {
+            break
+        }
+        candiesLeft = candiesLeft - 1
+    }
+    println("Final score: " + score)
+    println("Sweet victory!")
+}
+
+candyCrusherDemo()

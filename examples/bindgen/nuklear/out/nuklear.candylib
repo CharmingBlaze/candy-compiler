@@ -1,0 +1,214 @@
+{
+  "library": "nuklear",
+  "namespace": "nk",
+  "headers": [
+    "C:\\Users\\rain\\Documents\\GO\\KGO\\examples\\bindgen\\nuklear\\nuklear.h",
+    "C:\\Users\\rain\\Documents\\GO\\KGO\\examples\\bindgen\\nuklear\\nuklear_demo.c"
+  ],
+  "generated_at": "2026-04-25T10:09:16Z",
+  "externs": [
+    {
+      "name": "nk_init",
+      "symbol": "nk_init",
+      "return_type": "nk_context*"
+    },
+    {
+      "name": "nk_begin",
+      "symbol": "nk_begin",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        },
+        {
+          "name": "title",
+          "type": "const char*"
+        },
+        {
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "name": "y",
+          "type": "int"
+        },
+        {
+          "name": "w",
+          "type": "int"
+        },
+        {
+          "name": "h",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "nk_button_label",
+      "symbol": "nk_button_label",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        },
+        {
+          "name": "label",
+          "type": "const char*"
+        }
+      ]
+    },
+    {
+      "name": "nk_end",
+      "symbol": "nk_end",
+      "return_type": "void",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        }
+      ]
+    },
+    {
+      "name": "nk_shutdown",
+      "symbol": "nk_shutdown",
+      "return_type": "void",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        }
+      ]
+    },
+    {
+      "name": "nk_button_presses",
+      "symbol": "nk_button_presses",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        }
+      ]
+    },
+    {
+      "name": "nk_calc_press_number",
+      "symbol": "nk_calc_press_number",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        },
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "nk_calc_press_op",
+      "symbol": "nk_calc_press_op",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        },
+        {
+          "name": "op",
+          "type": "const char*"
+        }
+      ]
+    },
+    {
+      "name": "nk_calc_press_equals",
+      "symbol": "nk_calc_press_equals",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        }
+      ]
+    },
+    {
+      "name": "nk_calc_display",
+      "symbol": "nk_calc_display",
+      "return_type": "int",
+      "params": [
+        {
+          "name": "ctx",
+          "type": "nk_context*"
+        }
+      ]
+    },
+    {
+      "name": "nk_wait_for_enter",
+      "symbol": "nk_wait_for_enter",
+      "return_type": "void"
+    },
+    {
+      "name": "nk_run_calculator_gui",
+      "symbol": "nk_run_calculator_gui",
+      "return_type": "void"
+    },
+    {
+      "name": "nk_NkCalcWndProc",
+      "symbol": "NkCalcWndProc",
+      "return_type": "static LRESULT CALLBACK",
+      "params": [
+        {
+          "name": "hwnd",
+          "type": "HWND"
+        },
+        {
+          "name": "msg",
+          "type": "UINT"
+        },
+        {
+          "name": "wParam",
+          "type": "WPARAM"
+        },
+        {
+          "name": "lParam",
+          "type": "LPARAM"
+        }
+      ]
+    },
+    {
+      "name": "nk_DefWindowProcA",
+      "symbol": "DefWindowProcA",
+      "return_type": "return",
+      "params": [
+        {
+          "name": "arg1",
+          "type": "hwnd"
+        },
+        {
+          "name": "arg2",
+          "type": "msg"
+        },
+        {
+          "name": "arg3",
+          "type": "wParam"
+        },
+        {
+          "name": "arg4",
+          "type": "lParam"
+        }
+      ]
+    }
+  ],
+  "compile": {
+    "glue_sources": [
+      "C:\\Users\\rain\\Documents\\GO\\KGO\\examples\\bindgen\\nuklear\\nuklear_demo.c"
+    ]
+  },
+  "link": {
+    "libs": [
+      "user32",
+      "gdi32"
+    ]
+  }
+}

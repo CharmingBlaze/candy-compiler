@@ -1,0 +1,2 @@
+struct S { x: Int };
+val v = S { x: 1 };

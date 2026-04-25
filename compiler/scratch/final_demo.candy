@@ -1,0 +1,12 @@
+val s = "KGO Native";
+println(s);
+println(len(s));
+val start = clock();
+println("Timer started...");
+// Simple loop equivalent
+val end = clock();
+println(end - start);
+if (len(s) == 10) {
+  println("String length is correct!");
+};
+exit(0);

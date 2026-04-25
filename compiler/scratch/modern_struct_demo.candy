@@ -1,0 +1,9 @@
+// Demo: native `candy -build` (LLVM IR + optional clang). Struct fields and arithmetic.
+
+struct Vector2 {
+    x: float
+    y: float
+}
+
+val v1: Vector2 = Vector2 { x: 1.0, y: 2.0 }
+return 0

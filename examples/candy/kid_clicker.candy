@@ -1,0 +1,17 @@
+// Example 2 from docs/CANDY_KID.md — run: go run -tags raylib ./cmd/candy ../examples/candy/kid_clicker.candy
+// (from repository root: cd compiler; go run -tags raylib ./cmd/candy ../examples/candy/kid_clicker.candy)
+
+window(800, 600, "Cookie Clicker")
+
+score = 0
+
+loop {
+  if clicked() {
+    score = score + 1
+  }
+  clear(SKYBLUE)
+  circle(400, 300, 100, BROWN)
+  text("Score: " + score, 300, 100, 30, BLACK)
+  text("Click the cookie!", 280, 500, 20, GRAY)
+  show()
+}

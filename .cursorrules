@@ -1,0 +1,25 @@
+# Candy Project Standards
+
+You are working on **Candy** (SimpleC) toolchain: a modular Go-based **interpreter + optional LLVM backend** for a gradually typed, beginner-friendly C/BASIC-style language. User-facing source files use the **`.candy`** extension; the `candy` CLI is under `cmd/candy`.
+
+## Project Structure
+- `candy_token`: Token definitions.
+- `candy_lexer`: Lexical analysis.
+- `candy_ast`: AST nodes (modular, file-per-node).
+- `candy_parser`: Pratt (TDOP) parser.
+- `candy_typecheck`: Semantic analysis and type checking.
+- `candy_report`: Diagnostic reporting (snippets, carets, colors).
+- `candy_evaluator`: AST-based interpreter.
+- `candy_lsp`: Language Server Protocol implementation.
+
+## Coding Patterns
+1. **Modularity**: Every AST node should have its own file in `candy_ast`.
+2. **Error Handling**: Use the `candy_report` system for user-facing errors. Structured diagnostics are preferred over simple strings.
+3. **Immutability**: Prefer `val` over `var` where possible in the language design.
+4. **Pratt Parsing**: Follow the TDOP pattern for expressions. Always register prefix and infix functions in `New()`.
+5. **Semicolons**: The lexer can insert `;` at newlines; parsers still call `expectSemicolon` where a statement must end — optional semicolons for “no `;`” style are a goal for the **dynamic** path.
+
+## AI Interaction Guidelines
+- When adding new AST nodes, create a new file and update `node_types.go` or `stringify.go` if needed.
+- When fixing bugs, check `candy_report` to ensure errors are clear and helpful.
+- Always run tests after making changes to core logic.

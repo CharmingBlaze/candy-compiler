@@ -1,0 +1,23 @@
+window(960, 640, "Raylib Texture Demo")
+setTargetFPS(60)
+
+// Replace with a real image path in your project.
+tex = loadTexture("assets/player.png")
+
+x = 120
+y = 220
+rot = 0
+scale = 2
+
+while !shouldClose() {
+    rot = rot + 45 * getFrameTime()
+
+    clear("black")
+    drawText(16, 10, "Texture demo: update path if needed", 20, "yellow")
+    drawTexture(tex, x, y, "white")
+    drawTextureEx(tex, x + 260, y + 30, rot, scale, "white")
+    flip()
+}
+
+unloadTexture(tex)
+closeWindow()

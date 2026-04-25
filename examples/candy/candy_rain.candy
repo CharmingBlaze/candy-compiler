@@ -1,0 +1,31 @@
+// Example: simple 3D "candy rain" (build candy with `-tags raylib`)
+
+Graphics3D(800, 600)
+camera = CreateCamera()
+light = CreateLight()
+PositionCamera(camera, 0.0, 10.0, -20.0)
+cameraClsColor(camera, 255, 192, 203)
+
+candies = []
+for (i = 0; i < 20; i = i + 1) {
+    candy = CreateSphere()
+    PositionEntity(candy, rand(-10, 10), rand(20, 40), rand(-5, 5))
+    ColorEntity(candy, rand(0, 255), rand(0, 255), rand(0, 255))
+    candies.append(candy)
+}
+
+while (!keyHit(key_esc)) {
+    foreach (candy in candies) {
+        y = EntityY(candy)
+        y = y - 0.15
+        PositionEntity(candy, EntityX(candy), y, EntityZ(candy))
+        if (y < 0) {
+            PositionEntity(candy, rand(-10, 10), 40, rand(-5, 5))
+        }
+        TurnEntity(candy, 1.0, 2.0, 0.5)
+    }
+    RenderWorld()
+    flip()
+}
+
+closeWindow()

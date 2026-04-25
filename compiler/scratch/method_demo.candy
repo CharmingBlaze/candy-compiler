@@ -1,0 +1,18 @@
+// Candy struct methods: define them *inside* the struct (C-style), not as top-level
+// `fun (v: Vector) ...` — the latter form parses but does not attach to instances yet.
+
+struct Vector {
+  x: int
+  y: int
+  int sum() {
+    return this.x + this.y
+  }
+  void scale(n) {
+    println("Scaling vector by {n}")
+  }
+}
+
+v = Vector { x: 10, y: 20 }
+s = v.sum()
+println("The sum from method is {s}")
+v.scale(5)

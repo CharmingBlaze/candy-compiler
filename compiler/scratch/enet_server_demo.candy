@@ -1,0 +1,28 @@
+print("ENET server demo (fallback-compatible)")
+enet.init()
+
+addr = enet.address("127.0.0.1", 19200)
+host = enet.host_create(addr, 64, 2, 0, 0)
+print("server listening on 127.0.0.1:19200")
+
+running = true
+while running {
+    ev = enet.host_service(host, 1000)
+    if ev["type"] == enet.EVENT_NONE {
+        continue
+    }
+    if ev["type"] == enet.EVENT_CONNECT {
+        print("peer connected: {ev[\"peerId\"]}")
+    } else if ev["type"] == enet.EVENT_RECEIVE {
+        msg = ev["packet"]["data"]
+        print("recv on channel {ev[\"channel\"]}: {msg}")
+        running = false
+    } else if ev["type"] == enet.EVENT_DISCONNECT {
+        print("peer disconnected: {ev[\"peerId\"]}")
+    }
+}
+
+enet.host_destroy(host)
+enet.deinit()
+print("server done")
+

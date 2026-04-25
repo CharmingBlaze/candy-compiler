@@ -1,0 +1,27 @@
+window(900, 600, "Raylib Input Demo")
+setTargetFPS(60)
+
+x = 450
+y = 300
+speed = 220
+
+while !shouldClose() {
+    dt = getFrameTime()
+
+    if isKeyDown("left") { x = x - speed * dt }
+    if isKeyDown("right") { x = x + speed * dt }
+    if isKeyDown("up") { y = y - speed * dt }
+    if isKeyDown("down") { y = y + speed * dt }
+
+    m = getMousePosition()
+
+    clear("navy")
+    drawCircle(x, y, 18, "yellow")
+    drawCircle(m["x"], m["y"], 8, "white")
+    drawText(12, 10, "Use arrows to move", 20, "white")
+    drawText(12, 36, "Mouse tracks with small dot", 18, "gray")
+    drawText(12, 60, "FPS: {getFPS()}", 18, "green")
+    flip()
+}
+
+closeWindow()

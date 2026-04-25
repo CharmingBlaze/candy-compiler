@@ -1,0 +1,3 @@
+val a = 5;
+val b = a + 10;
+return b * 2;

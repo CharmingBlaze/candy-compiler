@@ -1,0 +1,11 @@
+struct Vector { x: Int, y: Int };
+
+val v = Vector { x: 10, y: 20 };
+println("Vector coordinates are ${v.x} and ${v.y}");
+
+val sum = v.x + v.y;
+println("The sum is ${sum}");
+
+if (v.x == 10) {
+  println("Member access works!");
+};
