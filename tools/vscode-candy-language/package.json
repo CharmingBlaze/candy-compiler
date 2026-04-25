@@ -1,0 +1,52 @@
+{
+  "name": "candy-language",
+  "displayName": "Candy Language Support",
+  "description": "Syntax highlighting and file support for Candy (.candy, .cdy, .candylib).",
+  "version": "0.1.0",
+  "publisher": "charmingblaze",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "candy",
+    "kgo",
+    "language"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CharmingBlaze/candy-compiler.git"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "candy",
+        "aliases": [
+          "Candy",
+          "candy"
+        ],
+        "extensions": [
+          ".candy",
+          ".cdy"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "candy",
+        "scopeName": "source.candy",
+        "path": "./syntaxes/candy.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.1"
+  }
+}

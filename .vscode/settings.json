@@ -3,8 +3,8 @@
     "build.buildFlags": ["-tags=raylib,enet"]
   },
   "files.associations": {
-    "*.candy": "plaintext",
-    "*.cdy": "plaintext",
+    "*.candy": "candy",
+    "*.cdy": "candy",
     "*.candylib": "json"
   },
   "editor.formatOnSave": true,
