@@ -48,6 +48,21 @@ candywrap wrap ./mylib.h --name mylib --output ./candy_modules/mylib --docs --st
 
 Then import the generated `.candylib` in Candy source and build as normal.
 
+## Easy Local Install
+
+If you are working from this repository directly, use the helper scripts:
+
+- macOS / Linux:
+  ```bash
+  ./scripts/install-local.sh
+  ```
+- Windows PowerShell:
+  ```powershell
+  .\scripts\install-local.ps1
+  ```
+
+This builds `candy`, `candywrap`, and `sweet` into `release/bin`.
+
 ## Main Commands
 
 - `candy run <file.candy>`: run via evaluator
@@ -90,3 +105,16 @@ candy_modules/<library>/
 ```
 
 That keeps manifests, glue, and docs in sync across machines.
+
+## Easy Commit + Push to Main
+
+Use the helper scripts to commit and push your current work to `origin/main`:
+
+- macOS / Linux:
+  ```bash
+  ./scripts/publish-main.sh "your commit message"
+  ```
+- Windows PowerShell:
+  ```powershell
+  .\scripts\publish-main.ps1 -Message "your commit message"
+  ```
