@@ -65,6 +65,7 @@ Then import the generated `.candylib` in Candy source and build as normal.
 - [Extensions (graphics/input/audio/3D)](docs/EXTENSIONS.md)
 - [Candywrap / Sweet](docs/CANDYWRAP.md)
 - [Candywrap Workflow Contract](docs/CANDYWRAP_WORKFLOW.md)
+- [VS Code Workflow](docs/VSCODE.md)
 - [Distribution Guide](docs/DISTRIBUTION.md)
 - [Architecture](ARCHITECTURE.md)
 

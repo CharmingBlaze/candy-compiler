@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "candy: build cli (raylib)",
+      "type": "shell",
+      "command": "go build -tags raylib -o candy.exe ./cmd/candy",
+      "options": {
+        "cwd": "${workspaceFolder}/compiler"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "candy: doctor",
+      "type": "shell",
+      "command": "go run ./cmd/candy doctor",
+      "options": {
+        "cwd": "${workspaceFolder}/compiler"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "candy: run current file",
+      "type": "shell",
+      "command": "go run ./cmd/candy run \"${file}\"",
+      "options": {
+        "cwd": "${workspaceFolder}/compiler"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "candy: build native current file",
+      "type": "shell",
+      "command": "go run ./cmd/candy build \"${file}\"",
+      "options": {
+        "cwd": "${workspaceFolder}/compiler"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "candywrap: wrap header",
+      "type": "shell",
+      "command": "go run ./cmd/candywrap wrap \"${input:headerPath}\" --name \"${input:wrapLibName}\" --output \"${input:wrapOutDir}\" --docs --stub",
+      "options": {
+        "cwd": "${workspaceFolder}/compiler"
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "headerPath",
+      "type": "promptString",
+      "description": "Header path to wrap (e.g. ../examples/bindgen/mylib.h)"
+    },
+    {
+      "id": "wrapLibName",
+      "type": "promptString",
+      "description": "Library name for generated module",
+      "default": "mylib"
+    },
+    {
+      "id": "wrapOutDir",
+      "type": "promptString",
+      "description": "Output folder for generated bindings",
+      "default": "../examples/bindgen/out"
+    }
+  ]
+}

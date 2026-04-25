@@ -1,5 +1,12 @@
 {
   "gopls": {
     "build.buildFlags": ["-tags=raylib,enet"]
-  }
+  },
+  "files.associations": {
+    "*.candy": "javascript",
+    "*.cdy": "javascript",
+    "*.candylib": "json"
+  },
+  "editor.formatOnSave": true,
+  "terminal.integrated.cwd": "${workspaceFolder}"
 }

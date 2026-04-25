@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "golang.go",
+    "ms-vscode.powershell",
+    "ms-vscode.cpptools",
+    "ms-vscode.makefile-tools"
+  ]
+}

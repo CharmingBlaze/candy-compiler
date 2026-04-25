@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Candy: Run current file",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd \"${workspaceFolder}/compiler\" && go run ./cmd/candy run \"${file}\""
+    },
+    {
+      "name": "Candy: Build native current file",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd \"${workspaceFolder}/compiler\" && go run ./cmd/candy build \"${file}\""
+    },
+    {
+      "name": "Candy: Doctor",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd \"${workspaceFolder}/compiler\" && go run ./cmd/candy doctor"
+    }
+  ]
+}
