@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -126,7 +127,10 @@ func assertGoldenFile(t *testing.T, expectedPath, gotPath string) {
 	if err != nil {
 		t.Fatalf("read golden %s: %v (run with -goldens:update to create/update)", expectedPath, err)
 	}
-	if string(want) != string(got) {
+	// Normalize line endings so tests are stable across Windows/macOS/Linux checkouts.
+	wantNormalized := strings.ReplaceAll(string(want), "\r\n", "\n")
+	gotNormalized := strings.ReplaceAll(string(got), "\r\n", "\n")
+	if wantNormalized != gotNormalized {
 		t.Fatalf("golden mismatch for %s (run with -goldens:update)", expectedPath)
 	}
 }

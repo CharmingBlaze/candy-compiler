@@ -206,13 +206,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	if *buildNative {
+		if candy_load.HasTopLevelImport(program) {
+			fmt.Fprintln(stderr, "candy: -build with stdin does not support import; pass a .candy file so paths resolve")
+			return 1
+		}
 		probe := candy_llvm.ProbeToolchain()
 		if !probe.Clang.Found {
 			printToolchainProbe(stdout, probe)
-			return 1
-		}
-		if candy_load.HasTopLevelImport(program) {
-			fmt.Fprintln(stderr, "candy: -build with stdin does not support import; pass a .candy file so paths resolve")
 			return 1
 		}
 		if *staticCheck {
