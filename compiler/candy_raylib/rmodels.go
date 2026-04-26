@@ -8,21 +8,96 @@ import (
 
 // builtinBeginMode3D sets the active 3D camera and starts 3D mode.
 // Usage: beginMode3D(camPosX, camPosY, camPosZ, targetX, targetY, targetZ, fovy)
+//    OR: beginMode3D(cameraObject)
 func builtinBeginMode3D(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
-	if err := expectArgs("beginMode3D", args, 7); err != nil {
-		return nil, err
+	var cx, cy, cz, tx, ty, tz, fovy float64
+	var upX, upY, upZ float64 = 0, 1, 0
+
+	if len(args) == 1 && args[0] != nil {
+		v := args[0]
+		// Handle camera as a Map or Struct (object)
+		getProp := func(name string, def float64) float64 {
+			var val *candy_evaluator.Value
+			if v.Kind == candy_evaluator.ValMap && v.StrMap != nil {
+				if vv, ok := v.StrMap[name]; ok {
+					local := vv
+					val = &local
+				}
+			} else if v.Kind == candy_evaluator.ValStruct && v.St != nil && v.St.Data != nil {
+				if vv, ok := v.St.Data[name]; ok {
+					local := vv
+					val = &local
+				}
+			}
+			if val != nil {
+				switch val.Kind {
+				case candy_evaluator.ValFloat:
+					return val.F64
+				case candy_evaluator.ValInt:
+					return float64(val.I64)
+				}
+			}
+			return def
+		}
+
+		// Improved property extraction for common Camera patterns
+		extractVec := func(name string, defX, defY, defZ float64) (float64, float64, float64) {
+			var val *candy_evaluator.Value
+			if v.Kind == candy_evaluator.ValMap && v.StrMap != nil {
+				if vv, ok := v.StrMap[name]; ok {
+					local := vv
+					val = &local
+				}
+			} else if v.Kind == candy_evaluator.ValStruct && v.St != nil && v.St.Data != nil {
+				if vv, ok := v.St.Data[name]; ok {
+					local := vv
+					val = &local
+				}
+			}
+			if val != nil {
+				if val.Kind == candy_evaluator.ValVec && len(val.Vec) == 3 {
+					return val.Vec[0], val.Vec[1], val.Vec[2]
+				}
+				// Accept map-style vectors too: {x, y, z}
+				if val.Kind == candy_evaluator.ValMap && val.StrMap != nil {
+					getComp := func(k string, d float64) float64 {
+						if vv, ok := val.StrMap[k]; ok {
+							switch vv.Kind {
+							case candy_evaluator.ValFloat:
+								return vv.F64
+							case candy_evaluator.ValInt:
+								return float64(vv.I64)
+							}
+						}
+						return d
+					}
+					return getComp("x", defX), getComp("y", defY), getComp("z", defZ)
+				}
+			}
+			return defX, defY, defZ
+		}
+
+		cx, cy, cz = extractVec("position", 0, 10, 10)
+		tx, ty, tz = extractVec("target", 0, 0, 0)
+		upX, upY, upZ = extractVec("up", 0, 1, 0)
+		fovy = getProp("fov", 60.0)
+	} else {
+		if err := expectArgs("beginMode3D", args, 7); err != nil {
+			return nil, err
+		}
+		cx, _ = getArgFloat("beginMode3D", args, 0)
+		cy, _ = getArgFloat("beginMode3D", args, 1)
+		cz, _ = getArgFloat("beginMode3D", args, 2)
+		tx, _ = getArgFloat("beginMode3D", args, 3)
+		ty, _ = getArgFloat("beginMode3D", args, 4)
+		tz, _ = getArgFloat("beginMode3D", args, 5)
+		fovy, _ = getArgFloat("beginMode3D", args, 6)
 	}
-	cx, _ := getArgFloat("beginMode3D", args, 0)
-	cy, _ := getArgFloat("beginMode3D", args, 1)
-	cz, _ := getArgFloat("beginMode3D", args, 2)
-	tx, _ := getArgFloat("beginMode3D", args, 3)
-	ty, _ := getArgFloat("beginMode3D", args, 4)
-	tz, _ := getArgFloat("beginMode3D", args, 5)
-	fovy, _ := getArgFloat("beginMode3D", args, 6)
+
 	activeCamera3D = rl.Camera3D{
 		Position:   rl.NewVector3(float32(cx), float32(cy), float32(cz)),
 		Target:     rl.NewVector3(float32(tx), float32(ty), float32(tz)),
-		Up:         rl.NewVector3(0, 1, 0),
+		Up:         rl.NewVector3(float32(upX), float32(upY), float32(upZ)),
 		Fovy:       float32(fovy),
 		Projection: rl.CameraPerspective,
 	}
@@ -527,8 +602,8 @@ func builtinUnloadModel(args []*candy_evaluator.Value) (*candy_evaluator.Value, 
 
 // builtinDrawModel draws a 3D model.
 func builtinDrawModel(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
-	if len(args) < 5 {
-		return nil, fmt.Errorf("drawModel expects modelId, x, y, z, scale, [color]")
+	if len(args) < 3 {
+		return nil, fmt.Errorf("drawModel expects modelId, x, y, z, scale, [color] OR modelId, posVec, scale, [color]")
 	}
 	id, _ := argInt("drawModel", args, 0)
 	m, ok := models[id]
@@ -536,20 +611,39 @@ func builtinDrawModel(args []*candy_evaluator.Value) (*candy_evaluator.Value, er
 		return nil, fmt.Errorf("drawModel: invalid model %d", id)
 	}
 
-	x, _ := getArgFloat("drawModel", args, 1)
-	y, _ := getArgFloat("drawModel", args, 2)
-	z, _ := getArgFloat("drawModel", args, 3)
-	scale, _ := getArgFloat("drawModel", args, 4)
-	c, _ := argColor("drawModel", args, 5, rl.White)
+	var pos rl.Vector3
+	var scale float64
+	var colorIdx int
 
-	rl.DrawModel(m, rl.NewVector3(float32(x), float32(y), float32(z)), float32(scale), c)
+	if args[1].Kind == candy_evaluator.ValVec || args[1].Kind == candy_evaluator.ValMap {
+		p, err := argVector3("drawModel", args, 1)
+		if err != nil {
+			return nil, err
+		}
+		pos = p
+		scale, _ = getArgFloat("drawModel", args, 2)
+		colorIdx = 3
+	} else {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("drawModel (floats) expects modelId, x, y, z, scale, [color]")
+		}
+		x, _ := getArgFloat("drawModel", args, 1)
+		y, _ := getArgFloat("drawModel", args, 2)
+		z, _ := getArgFloat("drawModel", args, 3)
+		pos = rl.NewVector3(float32(x), float32(y), float32(z))
+		scale, _ = getArgFloat("drawModel", args, 4)
+		colorIdx = 5
+	}
+
+	c, _ := argColor("drawModel", args, colorIdx, rl.White)
+	rl.DrawModel(m, pos, float32(scale), c)
 	return null(), nil
 }
 
 // builtinDrawModelEx draws a 3D model with extended parameters (rotation, scale).
 func builtinDrawModelEx(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
-	if len(args) < 11 {
-		return nil, fmt.Errorf("drawModelEx expects modelId, x, y, z, rotX, rotY, rotZ, angle, scaleX, scaleY, scaleZ, [color]")
+	if len(args) < 6 {
+		return nil, fmt.Errorf("drawModelEx expects modelId, x, y, z, rotX, rotY, rotZ, angle, sx, sy, sz, [color] OR modelId, pos, axis, angle, scale, [color]")
 	}
 	id, _ := argInt("drawModelEx", args, 0)
 	m, ok := models[id]
@@ -557,19 +651,49 @@ func builtinDrawModelEx(args []*candy_evaluator.Value) (*candy_evaluator.Value, 
 		return nil, fmt.Errorf("drawModelEx: invalid model %d", id)
 	}
 
-	px, _ := getArgFloat("drawModelEx", args, 1)
-	py, _ := getArgFloat("drawModelEx", args, 2)
-	pz, _ := getArgFloat("drawModelEx", args, 3)
-	rx, _ := getArgFloat("drawModelEx", args, 4)
-	ry, _ := getArgFloat("drawModelEx", args, 5)
-	rz, _ := getArgFloat("drawModelEx", args, 6)
-	angle, _ := getArgFloat("drawModelEx", args, 7)
-	sx, _ := getArgFloat("drawModelEx", args, 8)
-	sy, _ := getArgFloat("drawModelEx", args, 9)
-	sz, _ := getArgFloat("drawModelEx", args, 10)
-	c, _ := argColor("drawModelEx", args, 11, rl.White)
+	var pos, axis, scale rl.Vector3
+	var angle float64
+	var colorIdx int
 
-	rl.DrawModelEx(m, rl.NewVector3(float32(px), float32(py), float32(pz)), rl.NewVector3(float32(rx), float32(ry), float32(rz)), float32(angle), rl.NewVector3(float32(sx), float32(sy), float32(sz)), c)
+	if args[1].Kind == candy_evaluator.ValVec || args[1].Kind == candy_evaluator.ValMap {
+		// High-level: model, pos, axis, angle, scale, [color]
+		p, err := argVector3("drawModelEx", args, 1)
+		if err != nil { return nil, err }
+		pos = p
+		a, err := argVector3("drawModelEx", args, 2)
+		if err != nil { return nil, err }
+		axis = a
+		angle, _ = getArgFloat("drawModelEx", args, 3)
+		s, err := argVector3("drawModelEx", args, 4)
+		if err != nil { return nil, err }
+		scale = s
+		colorIdx = 5
+	} else {
+		// Low-level: model, px, py, pz, ax, ay, az, angle, sx, sy, sz, [color]
+		if len(args) < 11 {
+			return nil, fmt.Errorf("drawModelEx (floats) expects 11 arguments")
+		}
+		px, _ := getArgFloat("drawModelEx", args, 1)
+		py, _ := getArgFloat("drawModelEx", args, 2)
+		pz, _ := getArgFloat("drawModelEx", args, 3)
+		pos = rl.NewVector3(float32(px), float32(py), float32(pz))
+		
+		ax, _ := getArgFloat("drawModelEx", args, 4)
+		ay, _ := getArgFloat("drawModelEx", args, 5)
+		az, _ := getArgFloat("drawModelEx", args, 6)
+		axis = rl.NewVector3(float32(ax), float32(ay), float32(az))
+		
+		angle, _ = getArgFloat("drawModelEx", args, 7)
+		
+		sx, _ := getArgFloat("drawModelEx", args, 8)
+		sy, _ := getArgFloat("drawModelEx", args, 9)
+		sz, _ := getArgFloat("drawModelEx", args, 10)
+		scale = rl.NewVector3(float32(sx), float32(sy), float32(sz))
+		colorIdx = 11
+	}
+
+	c, _ := argColor("drawModelEx", args, colorIdx, rl.White)
+	rl.DrawModelEx(m, pos, axis, float32(angle), scale, c)
 	return null(), nil
 }
 

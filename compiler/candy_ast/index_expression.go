@@ -7,6 +7,7 @@ type IndexExpression struct {
 	Token candy_token.Token
 	Base  Expression
 	Index Expression
+	IsSafe bool
 }
 
 func (ie *IndexExpression) expressionNode()      {}

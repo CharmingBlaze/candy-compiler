@@ -1,0 +1,12 @@
+import candy.ai
+import candy.network
+import candy.proc
+
+agent = SteeringAgent()
+print("SteeringAgent created")
+
+server = NetworkServer()
+print("NetworkServer created")
+
+n = Noise.perlin(1.0, 2.0)
+print("Noise value: {n}")

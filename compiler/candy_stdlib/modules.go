@@ -9,8 +9,21 @@ var Modules = map[string]string{
 	"fs":     `// Alias of file`,
 	"json":   `// Host stdlib: json.*`,
 	"random": `// Host stdlib: random.*`,
-	"rand":   `// Alias of random`,
 	"time":   `// Host stdlib: time.*`,
+	"rand":   `// Alias of random`,
+	"candy.math": `
+fun sin(x: float): float { return math.sin(x); };
+fun cos(x: float): float { return math.cos(x); };
+fun tan(x: float): float { return math.tan(x); };
+fun atan2(y: float, x: float): float { return math.atan2(y, x); };
+fun sqrt(x: float): float { return math.sqrt(x); };
+fun floor(x: float): float { return math.floor(x); };
+fun ceil(x: float): float { return math.ceil(x); };
+fun abs(x: float): float { return math.abs(x); };
+fun max(a: float, b: float): float { return math.max(a, b); };
+fun min(a: float, b: float): float { return math.min(a, b); };
+fun random(min: float, max: float): float { return rand.float(min, max); };
+`,
 	"std/strings": `
 fun isEmpty(s: String): Bool { return len(s) == 0; };
 `,
@@ -28,25 +41,51 @@ fun cwdNow(): String { return cwd(); };
 fun get(name: String): String? { return getEnv(name); };
 `,
 	"std/io": `
-// Placeholder for interpreter-side IO bindings.
+fun printLine(msg) { print(msg); };
+fun printLines(lines) {
+    for v in lines { print(v); }
+};
 `,
 	"std/time": `
-// Placeholder for interpreter-side time bindings.
+fun nowMillis() { return time.now(); };
+fun sleepMs(ms) { time.sleep(ms); };
+fun sleepSec(sec) { time.sleep_sec(sec); };
 `,
 	"std/json": `
-// Placeholder for interpreter-side json bindings.
+fun parse(text: String) { return json.parse(text); };
+fun stringify(v) { return json.stringify(v); };
+fun load(path: String) { return json.load(path); };
+fun save(path: String, v) { return json.save(path, v); };
 `,
 	"std/collections": `
-// Kotlin-like collections surface (placeholder).
+fun makeSet(items) {
+    var m = {}
+    for v in items { m[v] = true; }
+    return m
+};
+fun queue(items) { return items; };
+fun stack(items) { return items; };
+fun deque(items) { return items; };
 `,
 	"std/concurrent": `
-// Coroutine scheduler/channel helpers (placeholder).
+fun start(fn) { return fn(); };
+fun delay(ms, fn) { time.sleep(ms); return fn(); };
 `,
 	"std/result": `
-fun isOk(r: Any): Bool { return true; };
+fun isOk(r: Any): Bool {
+    if r == null { return false; }
+    if r.ok != null { return r.ok; }
+    if r.error != null { return false; }
+    return true
+};
+fun isErr(r: Any): Bool { return !isOk(r); };
 `,
 	"std/ffi": `
-// Native interop helpers (placeholder).
+fun available(): Bool { return false; };
+fun call(name: String, args) {
+    print("ffi.call unavailable in interpreter: {name}")
+    return null
+};
 `,
 }
 

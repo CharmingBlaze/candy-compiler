@@ -1,0 +1,27 @@
+import candy.2d
+import candy.3d
+import candy.physics2d
+import candy.physics3d
+import candy.ui
+import candy.scene
+import candy.audio
+import candy.input
+import candy.resources
+import candy.save
+import candy.debug
+import candy.state
+import candy.camera
+import candy.ai
+import candy.game3d
+import candy.proc
+import candy.vfx
+import candy.editor
+import "std/io"
+import "std/time"
+import "std/json"
+import "std/collections"
+import "std/concurrent"
+import "std/result"
+import "std/ffi"
+
+print("stdlib import smoke ok")

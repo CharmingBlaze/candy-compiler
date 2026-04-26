@@ -15,6 +15,24 @@ func valueToValue(v *Value) Value {
 
 // evalAssign handles = for identifiers, a[i], and obj.field (instance = struct { ... }).
 func evalAssign(t *candy_ast.AssignExpression, e *Env) (*Value, error) {
+	op := t.Operator
+	if op == "" {
+		op = "="
+	}
+
+	// Short-circuiting for auto-vivification operators
+	if op == "||=" || op == "??=" {
+		lv, err := evalExpression(t.Left, e)
+		if err == nil && lv != nil {
+			if op == "||=" && lv.Truthy() {
+				return lv, nil
+			}
+			if op == "??=" && !isNullishValue(lv) {
+				return lv, nil
+			}
+		}
+	}
+
 	rhs, err := evalExpression(t.Value, e)
 	if err != nil {
 		return nil, err
@@ -22,11 +40,8 @@ func evalAssign(t *candy_ast.AssignExpression, e *Env) (*Value, error) {
 	if rhs == nil {
 		rhs = &Value{Kind: ValNull}
 	}
-	op := t.Operator
-	if op == "" {
-		op = "="
-	}
-	if op != "=" {
+
+	if op != "=" && op != "||=" && op != "??=" {
 		baseOp, ok := mapAssignToInfix(op)
 		if !ok {
 			return nil, fmt.Errorf("unsupported assignment operator %q", op)
@@ -63,6 +78,52 @@ func evalAssign(t *candy_ast.AssignExpression, e *Env) (*Value, error) {
 				continue
 			}
 			e.Set(id.Value, &rhs.Elems[i])
+		}
+		return rhs, nil
+	case *candy_ast.MapLiteral:
+		// Object destructuring: {x, y} = obj
+		if rhs.Kind != ValMap && rhs.Kind != ValStruct {
+			return nil, fmt.Errorf("object destructuring requires map/object value")
+		}
+		for _, pr := range l.Pairs {
+			keyExpr := pr.Key
+			keyName := ""
+			if ks, ok := keyExpr.(*candy_ast.StringLiteral); ok {
+				keyName = ks.Value
+			} else if ki, ok := keyExpr.(*candy_ast.Identifier); ok {
+				keyName = ki.Value
+			}
+			target, ok := pr.Value.(*candy_ast.Identifier)
+			if !ok || target == nil {
+				// Support shorthand where parser represents only the key.
+				if keyName != "" {
+					target = &candy_ast.Identifier{Value: keyName}
+				} else {
+					return nil, fmt.Errorf("object destructuring targets must be identifiers")
+				}
+			}
+			keyName = strings.Trim(keyName, "\"'")
+			targetName := strings.Trim(target.Value, "\"'")
+			if keyName == "" {
+				keyName = targetName
+			}
+			var src *Value
+			if rhs.Kind == ValMap {
+				if v, ok := rhs.StrMap[keyName]; ok {
+					vv := v
+					src = &vv
+				} else {
+					src = &Value{Kind: ValNull}
+				}
+			} else {
+				if v, ok := rhs.St.Data[keyName]; ok {
+					vv := v
+					src = &vv
+				} else {
+					src = &Value{Kind: ValNull}
+				}
+			}
+			e.Set(targetName, src)
 		}
 		return rhs, nil
 	case *candy_ast.IndexExpression:
@@ -146,10 +207,58 @@ func evalAssignDot(t *candy_ast.DotExpression, rhs *Value, e *Env) (*Value, erro
 	if (place == nil || place.Kind == ValNull) && t.IsSafe {
 		return &Value{Kind: ValNull}, nil
 	}
+	if place.Kind == ValMap {
+		if place.StrMap == nil {
+			place.StrMap = map[string]Value{}
+		}
+		key := t.Right.Value
+		for k := range place.StrMap {
+			if strings.EqualFold(k, key) {
+				key = k
+				break
+			}
+		}
+		place.StrMap[key] = valueToValue(rhs)
+		return rhs, nil
+	}
+	if place.Kind == ValVec {
+		key := strings.ToLower(t.Right.Value)
+		idx := -1
+		switch key {
+		case "x":
+			idx = 0
+		case "y":
+			idx = 1
+		case "z":
+			idx = 2
+		case "w":
+			idx = 3
+		}
+		if idx >= 0 && idx < len(place.Vec) {
+			f, err := f64Arg(rhs)
+			if err != nil {
+				return nil, err
+			}
+			place.Vec[idx] = f
+			return rhs, nil
+		}
+		return nil, &RuntimeError{Msg: "vector has no assignable property: " + key}
+	}
 	if place.Kind != ValStruct || place.St == nil {
-		return nil, &RuntimeError{Msg: "dot assign: not a struct instance"}
+		return nil, &RuntimeError{Msg: "dot assign: not a struct/map/vector instance (got " + place.String() + ")"}
 	}
 	key := t.Right.Value
+	if place.St.Def != nil {
+		for _, prop := range place.St.Def.Properties {
+			if prop == nil || prop.Name == nil || !strings.EqualFold(prop.Name.Value, key) {
+				continue
+			}
+			if err := evalStructPropertySetter(place, prop, rhs, e); err != nil {
+				return nil, err
+			}
+			return rhs, nil
+		}
+	}
 	if place.St.Data == nil {
 		place.St.Data = make(map[string]Value)
 	}

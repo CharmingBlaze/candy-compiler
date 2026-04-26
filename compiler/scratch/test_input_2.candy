@@ -1,0 +1,8 @@
+object Input {
+    var a = 1
+    fun hello() { print("hello"); }
+    var b = 2
+}
+print("a: " + format("{}", Input.a))
+Input.hello()
+print("b: " + format("{}", Input.b))

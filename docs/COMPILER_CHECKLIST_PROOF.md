@@ -13,6 +13,8 @@ This file maps checklist sections to concrete implementation and test evidence.
 - `5 Objects/structs` -> parse in `compiler/candy_parser/parse_decls.go` and `compiler/candy_parser/expressions_parser.go`; runtime instantiation/methods in `compiler/candy_evaluator/eval.go` + `compiler/candy_evaluator/eval_struct.go`.
 - `6 Arrays/lists + array()/bytes()` -> parser/runtime in `compiler/candy_parser/expressions_parser.go` + `compiler/candy_evaluator/builtin.go` + `compiler/candy_evaluator/eval_container_ops.go`.
 - `7 Strings` -> interpolation parse in `compiler/candy_parser/expressions_parser.go`; runtime string ops in `compiler/candy_evaluator/eval.go` + `compiler/candy_evaluator/stdlib_builtins.go`.
+- Game-dev ergonomics (`docs/new stuff 1.md`) -> vector runtime and helpers in `compiler/candy_evaluator/vec_runtime.go`; physics helper behavior in `compiler/candy_evaluator/physics_runtime_helpers.go`; import ergonomics and named-call parsing in `compiler/candy_parser/parse_simplec_basic.go` + `compiler/candy_parser/expressions_parser.go`.
+- Game systems 1.2 (`docs/new stuff 1.2.md`) -> helper runtime surface in `compiler/candy_evaluator/vec_runtime.go` + `compiler/candy_evaluator/eval_container_ops.go`; parser anchors in `compiler/candy_parser/parser_test.go`; helper type registration in `compiler/candy_typecheck/check.go`.
 - `8 Null/default` -> `null`, `??`, and `or` fallback behavior in `compiler/candy_evaluator/eval.go`.
 - `9 Try/catch/finally` -> parse/eval in `compiler/candy_parser/parse_simplec_basic.go` + `compiler/candy_evaluator/eval_try.go`.
 - `10 with/delete` -> parser in `compiler/candy_parser/statements_parser.go`; runtime in `compiler/candy_evaluator/eval.go` + `compiler/candy_evaluator/eval_struct.go`.
@@ -36,6 +38,7 @@ This file maps checklist sections to concrete implementation and test evidence.
 - Extended method ergonomics: `TestEval_StringAndArrayExtendedMethods` (string `indexOf`/`substring`, array `reduce/find/all/any/unique`).
 - Membership ergonomics: `TestInOperatorParsing`, `TestEval_InOperatorForArrayMapAndString` (`in` for array/map/string membership).
 - Optional syntax coverage: `TestNotInOperatorParsing`, `TestEval_NotInOperator`, `TestTernaryOperatorParsing`, `TestEval_TernaryOperator`.
+- Game-dev additions: `TestImportAliasAndFromImportParsing`, `TestNamedCallArgumentParsing`, `TestEval_VecBuiltinsAndOps`, `TestEval_NamedArgumentsOnUserFunction`.
 
 ## 15-19 Builtins + File IO
 

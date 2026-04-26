@@ -1,72 +1,106 @@
-// Mario 64 Style Demo in Candy
-// WASD to move, SPACE to jump
+// Candy Mario 64 - High Level Systems Version
+import candy.3d
+import candy.physics3d
+import candy.input
+import candy.scene
+import candy.audio
+import candy.ui
 
-window(1280, 720, "Candy Mario 64")
-setTargetFPS(60)
-
-// Player state
-px = 0.0; py = 1.0; pz = 0.0
-pvx = 0.0; pvy = 0.0; pvz = 0.0
-is_grounded = true
-
-// Camera state
-cam_dist = 10.0
-cam_height = 5.0
-
-while !shouldClose() {
-    // 1. Input & Movement
-    speed = 0.2
-    if isKeyDown("w") { pz = pz - speed }
-    if isKeyDown("s") { pz = pz + speed }
-    if isKeyDown("a") { px = px - speed }
-    if isKeyDown("d") { px = px + speed }
+// 1. Define Player Object
+object Player extends CharacterController3D {
+    var model = Model("assets/mario.obj")
+    var hp = 3
+    var score = 0
     
-    // 2. Physics (Gravity & Jumping)
-    if isKeyDown("space") and is_grounded {
-        pvy = 0.3
-        is_grounded = false
+    fun init() {
+        position = vec3(0, 10, 0)
+        Input.bind("jump", [KEY_SPACE])
+        Input.bind("move", [KEY_W, KEY_S, KEY_A, KEY_D])
     }
     
-    if !is_grounded {
-        pvy = pvy - 0.015 // Gravity
-        py = py + pvy
+    fun update(dt) {
+        var moveDir = Input.get2DAxis("move")
+        move(vec3(moveDir.x, 0, moveDir.y), 12.0, dt)
         
-        if py <= 1.0 { // Floor collision
-            py = 1.0
-            pvy = 0.0
-            is_grounded = true
+        if Input.isPressed("jump") and onGround {
+            jump()
         }
     }
     
-    // 3. Update Camera (Follows Player)
-    cx = px; cy = py + cam_height; cz = pz + cam_dist
-    tx = px; ty = py; tz = pz
-    
-    // 4. Rendering
-    beginDrawing()
-        clearBackground("sky")
-        
-        // params: camX, camY, camZ, targetX, targetY, targetZ, fovY
-        beginMode3D(cx, cy, cz, tx, ty, tz, 45.0)
-            
-            // Draw floor
-            drawGrid(20, 1.0)
-            
-            // Draw Player (Mario)
-            drawCube(px, py, pz, 1.0, 1.0, 1.0, "red")
-            
-            // Draw some obstacles
-            drawCube(5.0, 1.0, 5.0, 2.0, 2.0, 2.0, "gray")
-            drawCube(-5.0, 1.0, -5.0, 2.0, 2.0, 2.0, "gray")
-            drawCube(0.0, 1.0, -10.0, 10.0, 2.0, 1.0, "maroon")
-            
-        endMode3D()
-        
-        drawText(10, 10, "CANDY MARIO 64", 20, "white")
-        drawText(10, 40, "WASD to move, SPACE to jump", 20, "gray")
-        
-        drawFPS(10, 70)
-    endDrawing()
+    fun draw() {
+        model.position = position
+        model.draw()
+    }
 }
 
-closeWindow()
+// 2. Define Level/Scene
+class Platform extends Entity3D {
+    var size = vec3(1, 1, 1)
+    var color = "gray"
+
+    fun draw() {
+        drawCube(position.x, position.y, position.z, size.x, size.y, size.z, color)
+    }
+}
+
+object GameLevel extends Scene {
+    var cam = OrbitCamera()
+    
+    fun init() {
+        add(Player)
+        
+        // Ground
+        add(Platform { position: vec3(0, 0, 0), size: vec3(30, 1, 30), color: "darkgray" })
+        
+        // Some platforms
+        add(Platform { position: vec3(7, 1.5, 6), size: vec3(5, 0.5, 5) })
+        add(Platform { position: vec3(-7, 2, -5), size: vec3(6, 0.5, 6) })
+        
+        cam.target = Player.position
+        cam.distance = 15.0
+    }
+    
+    fun update(dt) {
+        super.update(dt)
+        cam.target = Player.position
+        cam.update(dt)
+    }
+    
+    fun draw() {
+        beginMode3D(cam)
+        drawGrid(40, 1.0)
+        super.draw()
+        endMode3D()
+        
+        // HUD
+        drawText(14, 12, "Candy Mario 64 - High Level Systems", 24, "white")
+        drawText(14, 44, format("HP: {}   Score: {}", Player.hp, Player.score), 22, "white")
+    }
+}
+
+fun main() {
+    initWindow(1280, 720, "Candy Mario 64")
+    setTargetFPS(60)
+    
+    Player.init()
+    GameLevel.init()
+    SceneManager.change(GameLevel)
+    
+    while !windowShouldClose() {
+        var dt = getFrameTime()
+        
+        SceneManager.update(dt)
+        GameLevel.update(dt)
+        
+        beginDrawing()
+        clearBackground("black")
+        
+        GameLevel.draw()
+        
+        endDrawing()
+    }
+    
+    closeWindow()
+}
+
+main()

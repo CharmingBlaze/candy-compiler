@@ -95,6 +95,7 @@ Status labels:
 
 ## Newly completed in this pass
 
+- `docs/new stuff 1.2.md` game-systems package shipped and documented (core exact helper names + advanced equivalent APIs).
 - Bitwise operators across lexer/parser/evaluator/LLVM (`| & ^ ~ << >>`).
 - `with` statement parsing + evaluation with resource cleanup.
 - `array(size)` and `bytes(size)` builtins.
@@ -115,5 +116,5 @@ Open gaps remain before a strict "100% works everywhere" claim:
 
 1. Full `go test ./...` baseline is green after parser/evaluator stabilization; keep it enforced in CI to prevent regressions.
 2. Some checklist items are still intentionally marked `PARTIAL` (objects/classes constructor parity, variadic extern ABI/runtime safety semantics).
-   - Additional `docs/other.md` items still partial/optional: list comprehensions, spread operator, global keyword/closure semantics, static local variables, goto, named call arguments, debug blocks, static_assert, and selective `from X import Y` syntax.
+   - Additional `docs/other.md` items still partial/optional: list comprehensions, spread operator, global keyword/closure semantics, static local variables, goto, debug blocks, and static_assert.
 3. Cross-platform runtime proof must be continuously enforced with CI smoke runs on Windows/macOS/Linux (including `sweet`/`candywrap` generation + native build flows).

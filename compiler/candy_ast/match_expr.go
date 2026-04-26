@@ -4,8 +4,9 @@ import "candy/candy_token"
 
 // MatchBranch is one `pattern => body` (pattern is an expression in the minimal design).
 type MatchBranch struct {
-	Pat  Expression
-	Body Expression
+	Pat   Expression
+	Guard Expression
+	Body  Expression
 }
 
 // MatchExpression is `match (subject) { pat => e; ... }` (minimal).

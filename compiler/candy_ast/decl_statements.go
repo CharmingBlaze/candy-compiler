@@ -27,6 +27,7 @@ func (s *ClassStatement) TokenLiteral() string { return s.Token.Literal }
 type ObjectStatement struct {
 	Token   candy_token.Token
 	Name    *Identifier
+	Base    *Identifier
 	Members []Statement
 }
 

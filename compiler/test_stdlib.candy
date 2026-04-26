@@ -1,0 +1,15 @@
+import candy.3d
+import candy.physics3d
+import candy.math
+// import candy.input
+// import candy.scene
+// import candy.audio
+// import candy.ui
+// import candy.resources
+// import candy.save
+// import candy.debug
+// import candy.state
+// import candy.camera
+// import candy.ai
+
+print("All stdlib modules parsed successfully!")

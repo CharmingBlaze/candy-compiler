@@ -268,6 +268,91 @@ struct Box { value: Int?; };
 	}
 }
 
+func TestImportAliasAndFromImportParsing(t *testing.T) {
+	input := `
+import math as m
+from math import sin, cos
+`
+	l := candy_lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	if len(program.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(program.Statements))
+	}
+	i1, ok := program.Statements[0].(*candy_ast.ImportStatement)
+	if !ok {
+		t.Fatalf("stmt0 expected import, got %T", program.Statements[0])
+	}
+	if i1.Path != "math" || i1.Alias != "m" {
+		t.Fatalf("unexpected import alias parse: %+v", i1)
+	}
+	i2, ok := program.Statements[1].(*candy_ast.ImportStatement)
+	if !ok {
+		t.Fatalf("stmt1 expected import, got %T", program.Statements[1])
+	}
+	if i2.From != "math" || len(i2.Symbols) != 2 || i2.Symbols[0] != "sin" || i2.Symbols[1] != "cos" {
+		t.Fatalf("unexpected from import parse: %+v", i2)
+	}
+}
+
+func TestNamedCallArgumentParsing(t *testing.T) {
+	input := `drawCube(x: 1, y: 2, z: 3)`
+	l := candy_lexer.New(input)
+	p := New(l)
+	prog := p.ParseProgram()
+	checkParserErrors(t, p)
+	es, ok := prog.Statements[0].(*candy_ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("expected expression statement, got %T", prog.Statements[0])
+	}
+	call, ok := es.Expression.(*candy_ast.CallExpression)
+	if !ok || len(call.Arguments) != 3 {
+		t.Fatalf("expected call with 3 args")
+	}
+	if _, ok := call.Arguments[0].(*candy_ast.NamedArgumentExpression); !ok {
+		t.Fatalf("first arg should be named argument")
+	}
+}
+
+func TestParse_NewStuff12CoreHelperCalls(t *testing.T) {
+	input := `
+pw = PhysicsWorld(vec3(0, -28, 0))
+imap = InputMap()
+imap.bind("jump", "space")
+imap.bindAxis2D("move", "w", "s", "a", "d")
+cam = OrbitCamera()
+cc = CharacterController()
+ents = EntityList()
+hud = HUD()
+ui = UILayout()
+sm = StateMachine("playing")
+tw = Tween()
+tf = Transform()
+`
+	l := candy_lexer.New(input)
+	p := New(l)
+	prog := p.ParseProgram()
+	checkParserErrors(t, p)
+	if len(prog.Statements) != 12 {
+		t.Fatalf("expected 12 statements, got %d", len(prog.Statements))
+	}
+}
+
+func TestParse_MultilineStructLiteralAsCallArg(t *testing.T) {
+	input := `
+add(Platform {
+    position: vec3(0, 0, 0),
+    size: vec3(30, 1, 30),
+    color: "darkgray"
+})
+`
+	l := candy_lexer.New(input)
+	p := New(l)
+	_ = p.ParseProgram()
+	checkParserErrors(t, p)
+}
+
 func TestNullableTypeSuffix_MixedCaseInputCanonicalized(t *testing.T) {
 	input := `
 fun maybe(n: INT?): StRiNg? { return null; };

@@ -107,7 +107,10 @@ func optimizeStatement(stmt candy_ast.Statement, ctx optimizeContext) []candy_as
 	case *candy_ast.IfExpression:
 		s.Condition = optimizeExpr(s.Condition, ctx)
 		if s.Consequence != nil {
-			s.Consequence.Statements = optimizeStatements(s.Consequence.Statements, ctx)
+			opt := optimizeStatement(s.Consequence, ctx)
+			if len(opt) == 1 {
+				s.Consequence = opt[0]
+			}
 		}
 		if s.Alternative != nil {
 			alt := optimizeStatement(s.Alternative, ctx)
@@ -120,7 +123,10 @@ func optimizeStatement(stmt candy_ast.Statement, ctx optimizeContext) []candy_as
 				if s.Consequence == nil {
 					return nil
 				}
-				return s.Consequence.Statements
+				if blk, ok := s.Consequence.(*candy_ast.BlockStatement); ok {
+					return blk.Statements
+				}
+				return []candy_ast.Statement{s.Consequence}
 			}
 			if s.Alternative == nil {
 				return nil

@@ -22,6 +22,25 @@ func evalStructLiteral(t *candy_ast.StructLiteral, e *Env) (*Value, error) {
 	if tmpl.Kind != ValStruct || tmpl.St == nil {
 		return nil, fmt.Errorf("struct literal: %s is not a struct type", name)
 	}
+	// Class/object literal style: `Platform { ... }`
+	// Instantiate class/object runtime and then overlay explicit fields.
+	if tmpl.St.ClassDef != nil {
+		inst, err := instantiateClass(tmpl, nil, e)
+		if err != nil {
+			return nil, err
+		}
+		if inst == nil || inst.St == nil {
+			return nil, &RuntimeError{Msg: "failed to instantiate class literal: " + name}
+		}
+		for fname, ex := range t.Fields {
+			v, err := evalExpression(ex, e)
+			if err != nil {
+				return nil, err
+			}
+			inst.St.Data[fname] = valueToValue(v)
+		}
+		return inst, nil
+	}
 	data := make(map[string]Value)
 	// Apply struct field defaults first, then override with explicit literal fields.
 	if tmpl.St.Def != nil {
@@ -81,6 +100,12 @@ func evalDot(t *candy_ast.DotExpression, e *Env) (*Value, error) {
 	if left.Kind == ValArray {
 		return arrayProps(left, t.Right.Value), nil
 	}
+	if left.Kind == ValVec {
+		if p := vecProps(left, t.Right.Value); p != nil {
+			return p, nil
+		}
+		return nil, &RuntimeError{Msg: "vector has no property: " + t.Right.Value}
+	}
 	if left.Kind == ValString {
 		if p := stringProps(left, t.Right.Value); p != nil {
 			return p, nil
@@ -88,6 +113,17 @@ func evalDot(t *candy_ast.DotExpression, e *Env) (*Value, error) {
 		return nil, &RuntimeError{Msg: "string has no property: " + t.Right.Value}
 	}
 	if left.Kind == ValMap {
+		key := t.Right.Value
+		if left.StrMap != nil {
+			if v, ok := left.StrMap[key]; ok {
+				return ptrVal(v), nil
+			}
+			for k, v := range left.StrMap {
+				if strings.EqualFold(k, key) {
+					return ptrVal(v), nil
+				}
+			}
+		}
 		return &Value{Kind: ValNull}, nil
 	}
 	if left.Kind != ValStruct || left.St == nil {
@@ -101,6 +137,60 @@ func evalDot(t *candy_ast.DotExpression, e *Env) (*Value, error) {
 	if v, ok := left.St.Data[key]; ok {
 		return ptrVal(v), nil
 	}
+	// Inheritance: check base class for members if not found in data
+	curr := left.St.ClassDef
+	for curr != nil {
+		for _, m := range curr.Members {
+			switch st := m.(type) {
+			case *candy_ast.VarStatement:
+				if strings.EqualFold(st.Name.Value, key) {
+					// If it's in data, it was already found. If not, maybe it's a default?
+					// For now, we only look at Data for instances.
+				}
+			}
+		}
+		if curr.Base != nil {
+			if baseVal, ok := e.Get(curr.Base.Value); ok && baseVal.Kind == ValStruct && baseVal.St != nil {
+				curr = baseVal.St.ClassDef
+				continue
+			}
+		}
+		break
+	}
+
+	if left.St.Def != nil {
+		for _, prop := range left.St.Def.Properties {
+			if prop == nil || prop.Name == nil || !strings.EqualFold(prop.Name.Value, key) {
+				continue
+			}
+			if prop.Getter != nil {
+				return evalStructPropertyGetter(left, prop, e)
+			}
+			if v, ok := left.St.Data[prop.Name.Value]; ok {
+				return ptrVal(v), nil
+			}
+		}
+	}
+	// Also check properties in ClassDef hierarchy
+	curr = left.St.ClassDef
+	for curr != nil {
+		for _, m := range curr.Members {
+			if prop, ok := m.(*candy_ast.PropertyStatement); ok {
+				if strings.EqualFold(prop.Name.Value, key) {
+					if prop.Getter != nil {
+						return evalStructPropertyGetter(left, prop, e)
+					}
+				}
+			}
+		}
+		if curr.Base != nil {
+			if baseVal, ok := e.Get(curr.Base.Value); ok && baseVal.Kind == ValStruct && baseVal.St != nil {
+				curr = baseVal.St.ClassDef
+				continue
+			}
+		}
+		break
+	}
 	var names []string
 	for k := range left.St.Data {
 		names = append(names, k)
@@ -111,6 +201,64 @@ func evalDot(t *candy_ast.DotExpression, e *Env) (*Value, error) {
 		}
 	}
 	return nil, withDidYouMean(typeName, key, names)
+}
+
+func evalStructPropertyGetter(inst *Value, prop *candy_ast.PropertyStatement, outer *Env) (*Value, error) {
+	if inst == nil || inst.St == nil || prop == nil || prop.Getter == nil {
+		return &Value{Kind: ValNull}, nil
+	}
+	ne := outer.NewEnclosed()
+	for k, v := range inst.St.Data {
+		vv := v
+		ne.Set(k, &vv)
+	}
+	ne.Set("this", inst)
+	for i, st := range prop.Getter.Statements {
+		r, err := evalStatement(st, ne)
+		if err != nil {
+			return nil, err
+		}
+		if rw, ok := r.(ReturnWrap); ok {
+			return rw.V, nil
+		}
+		// Implicit return
+		if i == len(prop.Getter.Statements)-1 {
+			if v, ok := r.(*Value); ok {
+				return v, nil
+			}
+		}
+	}
+	return &Value{Kind: ValNull}, nil
+}
+
+func evalStructPropertySetter(inst *Value, prop *candy_ast.PropertyStatement, rhs *Value, outer *Env) error {
+	if inst == nil || inst.St == nil || prop == nil {
+		return nil
+	}
+	if prop.Setter == nil {
+		if prop.Name != nil {
+			inst.St.Data[prop.Name.Value] = valueToValue(rhs)
+		}
+		return nil
+	}
+	ne := outer.NewEnclosed()
+	for k, v := range inst.St.Data {
+		vv := v
+		ne.Set(k, &vv)
+	}
+	ne.Set("this", inst)
+	ne.Set("value", rhs)
+	for _, st := range prop.Setter.Statements {
+		if _, err := evalStatement(st, ne); err != nil {
+			return err
+		}
+	}
+	for k := range inst.St.Data {
+		if v, ok := ne.Get(k); ok {
+			inst.St.Data[k] = *v
+		}
+	}
+	return nil
 }
 
 func arrayProps(v *Value, name string) *Value {
@@ -179,6 +327,9 @@ func evalMethodCall(dot *candy_ast.DotExpression, argExprs []candy_ast.Expressio
 	if recv.Kind == ValArray {
 		return callArrayMethod(recv, dot.Right.Value, argExprs, e)
 	}
+	if recv.Kind == ValVec {
+		return callVecMethod(recv, dot.Right.Value, argExprs, e)
+	}
 	if recv.Kind == ValMap {
 		return callMapMethod(recv, dot.Right.Value, argExprs, e)
 	}
@@ -197,8 +348,11 @@ func evalMethodCall(dot *candy_ast.DotExpression, argExprs []candy_ast.Expressio
 				break
 			}
 		}
-	} else if recv.St.ClassDef != nil {
-		for _, m := range recv.St.ClassDef.Members {
+	}
+	// Search ClassDef and its inheritance chain
+	currCls := recv.St.ClassDef
+	for currCls != nil && method == nil {
+		for _, m := range currCls.Members {
 			if ms, ok := m.(*candy_ast.FunctionStatement); ok {
 				if ms.Name != nil && strings.EqualFold(ms.Name.Value, name) {
 					method = ms
@@ -206,18 +360,36 @@ func evalMethodCall(dot *candy_ast.DotExpression, argExprs []candy_ast.Expressio
 				}
 			}
 		}
+		if method == nil && currCls.Base != nil {
+			if baseVal, ok := e.Get(currCls.Base.Value); ok && baseVal.Kind == ValStruct && baseVal.St != nil {
+				currCls = baseVal.St.ClassDef
+			} else {
+				break
+			}
+		} else {
+			break
+		}
 	}
 
 	if method == nil {
-		return nil, &RuntimeError{Msg: "no such method: " + name}
-	}
-	var args []*Value
-	for _, a := range argExprs {
-		av, err2 := evalExpression(a, e)
-		if err2 != nil {
-			return nil, err2
+		avail := []string{}
+		if recv.St.ClassDef != nil {
+			for _, m := range recv.St.ClassDef.Members {
+				if ms, ok := m.(*candy_ast.FunctionStatement); ok {
+					avail = append(avail, fmt.Sprintf("%s(%T)", ms.Name.Value, m))
+				} else {
+					avail = append(avail, fmt.Sprintf("%T", m))
+				}
+			}
 		}
-		args = append(args, av)
+		return nil, &RuntimeError{Msg: fmt.Sprintf("no such method: %s (available: %v)", name, avail)}
+	}
+	args, namedArgs, err := evalCallArgs(argExprs, e)
+	if err != nil {
+		return nil, err
+	}
+	if len(namedArgs) > 0 {
+		args = reorderCallArgs(method, args, namedArgs)
 	}
 	outer := recv.St.Env
 	if outer == nil {
@@ -236,9 +408,30 @@ func evalMethodCall(dot *candy_ast.DotExpression, argExprs []candy_ast.Expressio
 		recvName = method.Receiver.Name.Value
 	}
 	ne.Set(recvName, recv)
+
+	// Bind 'super' if there is a base class
+	if recv.St.ClassDef != nil && recv.St.ClassDef.Base != nil {
+		if baseVal, ok := e.Get(recv.St.ClassDef.Base.Value); ok && baseVal.Kind == ValStruct && baseVal.St != nil {
+			superWrapper := &Value{
+				Kind: ValStruct,
+				St: &structVal{
+					ClassDef: baseVal.St.ClassDef,
+					Data:     recv.St.Data,
+					Env:      recv.St.Env,
+				},
+			}
+			ne.Set("super", superWrapper)
+		}
+	}
 	for i, p0 := range method.Parameters {
 		if i < len(args) {
 			ne.Set(p0.Name.Value, args[i])
+		} else if p0.Default != nil {
+			dv, err := evalExpression(p0.Default, outer)
+			if err != nil {
+				return nil, err
+			}
+			ne.Set(p0.Name.Value, dv)
 		}
 	}
 	if method.Body == nil {
@@ -252,13 +445,19 @@ func evalMethodCall(dot *candy_ast.DotExpression, argExprs []candy_ast.Expressio
 			}
 		}
 	}()
-	for _, st := range method.Body.Statements {
+	for i, st := range method.Body.Statements {
 		r, err3 := evalStatement(st, ne)
 		if err3 != nil {
 			return nil, err3
 		}
 		if rw, ok2 := r.(ReturnWrap); ok2 {
 			return rw.V, nil
+		}
+		// Implicit return
+		if i == len(method.Body.Statements)-1 {
+			if v, ok := r.(*Value); ok {
+				return v, nil
+			}
 		}
 	}
 	return &Value{Kind: ValNull}, nil
@@ -280,11 +479,17 @@ func evalObjectStatement(t *candy_ast.ObjectStatement, e *Env) (*Value, error) {
 	cls := &candy_ast.ClassStatement{
 		Token:   t.Token,
 		Name:    t.Name,
+		Base:    t.Base,
 		Members: t.Members,
 	}
-	v := &Value{Kind: ValStruct, St: &structVal{ClassDef: cls, Env: e, Data: make(map[string]Value)}}
-	e.Set(t.Name.Value, v)
-	return v, nil
+	// Objects are singletons: we create the definition AND an instance immediately.
+	def := &Value{Kind: ValStruct, St: &structVal{ClassDef: cls, Env: e, Data: make(map[string]Value)}}
+	instance, err := instantiateClass(def, nil, e)
+	if err != nil {
+		return nil, err
+	}
+	e.Set(t.Name.Value, instance)
+	return instance, nil
 }
 
 func evalDelete(t *candy_ast.DeleteStatement, e *Env) (*Value, error) {

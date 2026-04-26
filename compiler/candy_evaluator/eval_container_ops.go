@@ -2,6 +2,7 @@ package candy_evaluator
 
 import (
 	"candy/candy_ast"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -115,23 +116,28 @@ func callArrayMethod(recv *Value, name string, argExprs []candy_ast.Expression, 
 		copy(recv.Elems[i+1:], recv.Elems[i:])
 		recv.Elems[i] = v
 		return recv, nil
-	case "remove":
-		// Candy: scores.remove(2) removes the element at index 2 (third item, 0-based).
+	case "remove", "delete":
 		if len(args) != 1 {
-			return nil, &RuntimeError{Msg: "remove: one index"}
+			return nil, &RuntimeError{Msg: "remove: one argument (index or value)"}
 		}
-		ix, ok := asInt64Value(args[0])
-		if !ok {
-			return nil, &RuntimeError{Msg: "remove: int index"}
+		// If it's an integer, try removing by index first.
+		if ix, ok := asInt64Value(args[0]); ok {
+			i := int(ix)
+			if i < 0 {
+				i = len(recv.Elems) + i
+			}
+			if i >= 0 && i < len(recv.Elems) {
+				recv.Elems = append(recv.Elems[:i], recv.Elems[i+1:]...)
+				return recv, nil
+			}
 		}
-		i := int(ix)
-		if i < 0 {
-			i = len(recv.Elems) + i
+		// Otherwise (or if index was out of bounds), try removing by value.
+		for i := range recv.Elems {
+			if valueEqual(&recv.Elems[i], args[0]) {
+				recv.Elems = append(recv.Elems[:i], recv.Elems[i+1:]...)
+				return recv, nil
+			}
 		}
-		if i < 0 || i >= len(recv.Elems) {
-			return nil, &RuntimeError{Msg: "remove: index out of range"}
-		}
-		recv.Elems = append(recv.Elems[:i], recv.Elems[i+1:]...)
 		return recv, nil
 	case "remove_first", "remove_value", "removevalue":
 		if len(args) != 1 {
@@ -146,10 +152,11 @@ func callArrayMethod(recv *Value, name string, argExprs []candy_ast.Expression, 
 		return recv, nil
 	case "remove_last", "removelast", "pop":
 		if len(recv.Elems) == 0 {
-			return recv, nil
+			return &Value{Kind: ValNull}, nil
 		}
+		last := recv.Elems[len(recv.Elems)-1]
 		recv.Elems = recv.Elems[:len(recv.Elems)-1]
-		return recv, nil
+		return ptrVal(last), nil
 	case "remove_at", "delete_at", "splice1":
 		if len(args) != 1 {
 			return nil, &RuntimeError{Msg: "remove_at: one index"}
@@ -368,6 +375,606 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 	m := recv.StrMap
 	ln := strings.ToLower(name)
 	switch ln {
+	case "addstatic":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "physicsworld") {
+			if len(args) != 1 {
+				return nil, &RuntimeError{Msg: "addStatic: one collider"}
+			}
+			st := m["static"]
+			st.Elems = append(st.Elems, valueToValue(args[0]))
+			m["static"] = st
+			return recv, nil
+		}
+	case "adddynamic":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "physicsworld") {
+			if len(args) != 1 {
+				return nil, &RuntimeError{Msg: "addDynamic: one body"}
+			}
+			dy := m["dynamic"]
+			dy.Elems = append(dy.Elems, valueToValue(args[0]))
+			m["dynamic"] = dy
+			return recv, nil
+		}
+	case "resolvecollision":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "physicsworld") {
+			if len(args) < 2 {
+				return nil, &RuntimeError{Msg: "resolveCollision: dynamicBox, staticBox [, velVec3]"}
+			}
+			if args[0] == nil || args[1] == nil || args[0].Kind != ValMap || args[1].Kind != ValMap {
+				return nil, &RuntimeError{Msg: "resolveCollision: requires boxes"}
+			}
+			return aabbOverlapsMap(args[0], args[1])
+		}
+	case "update":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString {
+			switch strings.ToLower(mtype.Str) {
+			case "physicsworld":
+				dt := 0.016
+				if len(args) > 0 && args[0] != nil {
+					if f, err := f64Arg(args[0]); err == nil {
+						dt = f
+					}
+				}
+				dynamic := m["dynamic"]
+				static := m["static"]
+				gravity := m["gravity"]
+				gVec := []float64{0, -9.8, 0}
+				if gravity.Kind == ValVec && len(gravity.Vec) == 3 {
+					gVec = gravity.Vec
+				}
+
+				for i := range dynamic.Elems {
+					body := &dynamic.Elems[i]
+					if body.Kind != ValMap {
+						continue
+					}
+					posVal, okP := body.StrMap["position"]
+					velVal, okV := body.StrMap["velocity"]
+					if !okP || !okV || posVal.Kind != ValVec || velVal.Kind != ValVec {
+						continue
+					}
+					// Apply gravity
+					velVal.Vec[0] += gVec[0] * dt
+					velVal.Vec[1] += gVec[1] * dt
+					velVal.Vec[2] += gVec[2] * dt
+
+					// Integrate position
+					posVal.Vec[0] += velVal.Vec[0] * dt
+					posVal.Vec[1] += velVal.Vec[1] * dt
+					posVal.Vec[2] += velVal.Vec[2] * dt
+
+					// Simple ground collision
+					if posVal.Vec[1] < 0 {
+						posVal.Vec[1] = 0
+						velVal.Vec[1] = 0
+					}
+
+					// Check static collisions (AABB)
+					for j := range static.Elems {
+						stat := &static.Elems[j]
+						if stat.Kind != ValMap {
+							continue
+						}
+						
+						sAABB, okS := stat.StrMap["aabb"]
+						if !okS || sAABB.Kind != ValMap {
+							continue
+						}
+
+						// Calculate player AABB (approximate)
+						bAABB := &Value{
+							Kind: ValMap,
+							StrMap: map[string]Value{
+								"center":      {Kind: ValVec, Vec: []float64{posVal.Vec[0], posVal.Vec[1] + 1.0, posVal.Vec[2]}},
+								"halfExtents": {Kind: ValVec, Vec: []float64{0.5, 1.0, 0.5}},
+							},
+						}
+
+						if overlaps, _ := aabbOverlapsMap(bAABB, &sAABB); overlaps.Truthy() {
+							// Basic resolution: revert to previous horizontal position
+							posVal.Vec[0] -= velVal.Vec[0] * dt
+							posVal.Vec[2] -= velVal.Vec[2] * dt
+							velVal.Vec[0] = 0
+							velVal.Vec[2] = 0
+						}
+					}
+
+					body.StrMap["position"] = posVal
+					body.StrMap["velocity"] = velVal
+				}
+				m["dynamic"] = dynamic
+				return recv, nil
+			case "orbitcamera":
+				// Get current state from map
+				target := m["target"]
+				dist := m["distance"]
+				yaw := m["yaw"]
+				pitch := m["pitch"]
+				sens := m["sensitivity"]
+				zoomSpd := m["zoomSpeed"]
+
+				if target.Kind != ValVec || dist.Kind != ValFloat || yaw.Kind != ValFloat || pitch.Kind != ValFloat {
+					return recv, nil
+				}
+
+				// Input handling via builtins
+				if fn, ok := Builtins["ismousebuttondown"]; ok {
+					// 0 is left, 1 is right
+					mb := Value{Kind: ValInt, I64: 1}
+					if down, _ := fn([]*Value{&mb}); down != nil && down.Truthy() {
+						if deltaFn, okD := Builtins["getmousedelta"]; okD {
+							d, _ := deltaFn(nil)
+							if d != nil && d.Kind == ValVec && len(d.Vec) >= 2 {
+								yaw.F64 += d.Vec[0] * sens.F64
+								pitch.F64 += d.Vec[1] * sens.F64
+								// Clamp pitch
+								if pitch.F64 > 1.5 {
+									pitch.F64 = 1.5
+								}
+								if pitch.F64 < -1.5 {
+									pitch.F64 = -1.5
+								}
+							}
+						}
+					}
+				}
+
+				if wheelFn, okW := Builtins["getmousewheelmove"]; okW {
+					w, _ := wheelFn(nil)
+					if w != nil && w.Kind == ValFloat {
+						dist.F64 -= w.F64 * zoomSpd.F64
+						if dist.F64 < 1 {
+							dist.F64 = 1
+						}
+					}
+				}
+
+				// Update map values
+				m["yaw"] = yaw
+				m["pitch"] = pitch
+				m["distance"] = dist
+
+				// Sync with host camera if possible
+				// We need to calculate the camera position from target, dist, yaw, pitch
+				camPos := []float64{
+					target.Vec[0] + dist.F64*math.Cos(yaw.F64)*math.Cos(pitch.F64),
+					target.Vec[1] + dist.F64*math.Sin(pitch.F64),
+					target.Vec[2] + dist.F64*math.Sin(yaw.F64)*math.Cos(pitch.F64),
+				}
+				
+				if fn, ok := Builtins["setcamera"]; ok {
+					// setCamera(pos, target, up)
+					p := Value{Kind: ValVec, Vec: camPos}
+					up := Value{Kind: ValVec, Vec: []float64{0, 1, 0}}
+					_, _ = fn([]*Value{&p, &target, &up})
+				}
+
+				return recv, nil
+			case "firstpersoncamera":
+				return recv, nil
+			case "statemachine":
+				// optional callback map: states[current].onUpdate
+				cur, okCur := m["current"]
+				states, okStates := m["states"]
+				if okCur && okStates && cur.Kind == ValString && states.Kind == ValMap {
+					if sv, okS := states.StrMap[cur.Str]; okS && sv.Kind == ValMap {
+						if upd, okU := sv.StrMap["onUpdate"]; okU {
+							fn := upd
+							_, _ = InvokeCallable(&fn, args)
+						}
+					}
+				}
+				return recv, nil
+			case "entitylist":
+				ents := m["entities"]
+				for i := range ents.Elems {
+					ev := ents.Elems[i]
+					if ev.Kind == ValMap {
+						tmp := ev
+						_, _ = callMapMethod(&tmp, "update", nil, e)
+						ents.Elems[i] = tmp
+					}
+				}
+				m["entities"] = ents
+				return recv, nil
+			case "tween":
+				dt := 0.016
+				if len(args) > 0 && args[0] != nil {
+					if f, err := f64Arg(args[0]); err == nil {
+						dt = f
+					}
+				}
+				tv := m["time"]
+				dur := m["duration"]
+				dir := m["direction"]
+				if tv.Kind != ValFloat || dur.Kind != ValFloat || dir.Kind != ValFloat {
+					return recv, nil
+				}
+				tv.F64 += dt * dir.F64
+				if tv.F64 > dur.F64 {
+					if lp, okLP := m["loop"]; okLP && lp.Kind == ValBool && lp.B {
+						if pp, okPP := m["pingpong"]; okPP && pp.Kind == ValBool && pp.B {
+							dir.F64 = -1
+							tv.F64 = dur.F64
+						} else {
+							tv.F64 = 0
+						}
+					} else {
+						tv.F64 = dur.F64
+					}
+				}
+				if tv.F64 < 0 {
+					tv.F64 = 0
+					dir.F64 = 1
+				}
+				m["time"] = tv
+				m["direction"] = dir
+				return recv, nil
+			}
+		}
+	case "bind", "map":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 2 || args[0] == nil || args[1] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "bind(action, keyOrKeys)"}
+			}
+			// Accept either a single key string (action button) or a 4-key array
+			// ([up, down, left, right]) for 2D movement actions.
+			if args[1].Kind == ValArray {
+				if len(args[1].Elems) >= 4 {
+					axes := m["axes2d"]
+					if axes.Kind != ValMap || axes.StrMap == nil {
+						axes = Value{Kind: ValMap, StrMap: map[string]Value{}}
+					}
+					axes.StrMap[args[0].Str] = Value{
+						Kind: ValArray,
+						Elems: []Value{
+							args[1].Elems[0],
+							args[1].Elems[1],
+							args[1].Elems[2],
+							args[1].Elems[3],
+						},
+					}
+					m["axes2d"] = axes
+					return recv, nil
+				}
+				if len(args[1].Elems) >= 1 {
+					acts := m["actions"]
+					if acts.Kind != ValMap || acts.StrMap == nil {
+						acts = Value{Kind: ValMap, StrMap: map[string]Value{}}
+					}
+					acts.StrMap[args[0].Str] = valueToValue(args[1])
+					m["actions"] = acts
+					return recv, nil
+				}
+				return recv, nil
+			}
+			if args[1].Kind != ValString && args[1].Kind != ValInt && args[1].Kind != ValFloat {
+				return nil, &RuntimeError{Msg: "bind(action, keyOrKeys): key must be int, float, string, or key array"}
+			}
+			acts := m["actions"]
+			if acts.Kind != ValMap || acts.StrMap == nil {
+				acts = Value{Kind: ValMap, StrMap: map[string]Value{}}
+			}
+			acts.StrMap[args[0].Str] = *args[1]
+			m["actions"] = acts
+			return recv, nil
+		}
+	case "bindaxis2d":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 5 || args[0] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "bindAxis2D(name, up, down, left, right)"}
+			}
+			axes := m["axes2d"]
+			if axes.Kind != ValMap || axes.StrMap == nil {
+				axes = Value{Kind: ValMap, StrMap: map[string]Value{}}
+			}
+			axes.StrMap[args[0].Str] = Value{Kind: ValArray, Elems: []Value{valueToValue(args[1]), valueToValue(args[2]), valueToValue(args[3]), valueToValue(args[4])}}
+			m["axes2d"] = axes
+			return recv, nil
+		}
+	case "getaxis2d", "get2daxis":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "getAxis2D(name)"}
+			}
+			axes := m["axes2d"]
+			if axes.Kind != ValMap || axes.StrMap == nil {
+				return &Value{Kind: ValVec, Vec: []float64{0, 0}}, nil
+			}
+			b, okB := axes.StrMap[args[0].Str]
+			if !okB || b.Kind != ValArray || len(b.Elems) < 4 {
+				return &Value{Kind: ValVec, Vec: []float64{0, 0}}, nil
+			}
+			getDown := func(keyVal Value) bool {
+				if keyVal.Kind != ValString && keyVal.Kind != ValInt && keyVal.Kind != ValFloat {
+					return false
+				}
+				if fn, ok := Builtins["iskeydown"]; ok {
+					kv := keyVal
+					v, err := fn([]*Value{&kv})
+					return err == nil && v != nil && v.Truthy()
+				}
+				return false
+			}
+			x := 0.0
+			y := 0.0
+			if getDown(b.Elems[0]) {
+				y -= 1
+			}
+			if getDown(b.Elems[1]) {
+				y += 1
+			}
+			if getDown(b.Elems[2]) {
+				x -= 1
+			}
+			if getDown(b.Elems[3]) {
+				x += 1
+			}
+			return &Value{Kind: ValVec, Vec: []float64{x, y}}, nil
+		}
+	case "ispressed", "isdown", "justpressed", "justreleased":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "isPressed(action) / justPressed(action) / justReleased(action)"}
+			}
+			acts := m["actions"]
+			if acts.Kind != ValMap || acts.StrMap == nil {
+				return &Value{Kind: ValBool, B: false}, nil
+			}
+			k, okK := acts.StrMap[args[0].Str]
+			if !okK {
+				return &Value{Kind: ValBool, B: false}, nil
+			}
+			bname := "iskeypressed"
+			switch ln {
+			case "isdown":
+				bname = "iskeydown"
+			case "justreleased":
+				bname = "iskeyreleased"
+			}
+			if k.Kind == ValArray {
+				for i := range k.Elems {
+					kv := k.Elems[i]
+					if kv.Kind != ValString && kv.Kind != ValInt && kv.Kind != ValFloat {
+						continue
+					}
+					if fn, ok := Builtins[bname]; ok {
+						v, err := fn([]*Value{&kv})
+						if err == nil && v != nil && v.Truthy() {
+							return &Value{Kind: ValBool, B: true}, nil
+						}
+					}
+				}
+				return &Value{Kind: ValBool, B: false}, nil
+			}
+			if k.Kind != ValString && k.Kind != ValInt && k.Kind != ValFloat {
+				return &Value{Kind: ValBool, B: false}, nil
+			}
+			if fn, ok := Builtins[bname]; ok {
+				kk := k
+				return fn([]*Value{&kk})
+			}
+			return &Value{Kind: ValBool, B: false}, nil
+		}
+	case "move":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "charactercontroller") {
+			// move(playerMap, inputVec2, dt)
+			if len(args) != 3 || args[0] == nil || args[1] == nil || args[2] == nil || args[0].Kind != ValMap || args[1].Kind != ValVec || len(args[1].Vec) < 2 {
+				return nil, &RuntimeError{Msg: "move(player, inputDirVec2, dt)"}
+			}
+			player := args[0]
+			dt, err := f64Arg(args[2])
+			if err != nil {
+				return nil, err
+			}
+			acc := m["acceleration"].F64
+			drag := m["drag"].F64
+			maxSpeed := m["maxSpeed"].F64
+			vel, okVel := player.StrMap["vel"]
+			if !okVel || vel.Kind != ValVec || len(vel.Vec) < 3 {
+				vel = Value{Kind: ValVec, Vec: []float64{0, 0, 0}}
+			}
+			vel.Vec[0] += args[1].Vec[0] * acc * dt
+			vel.Vec[2] += args[1].Vec[1] * acc * dt
+			vel.Vec[0] *= (1.0 - clampFloat(drag*dt, 0, 0.9))
+			vel.Vec[2] *= (1.0 - clampFloat(drag*dt, 0, 0.9))
+			vel.Vec[0] = clampFloat(vel.Vec[0], -maxSpeed, maxSpeed)
+			vel.Vec[2] = clampFloat(vel.Vec[2], -maxSpeed, maxSpeed)
+			player.StrMap["vel"] = vel
+			return player, nil
+		}
+	case "jump":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "charactercontroller") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValMap {
+				return nil, &RuntimeError{Msg: "jump(player)"}
+			}
+			player := args[0]
+			vel, okVel := player.StrMap["vel"]
+			if !okVel || vel.Kind != ValVec || len(vel.Vec) < 3 {
+				vel = Value{Kind: ValVec, Vec: []float64{0, 0, 0}}
+			}
+			vel.Vec[1] = m["jumpPower"].F64
+			player.StrMap["vel"] = vel
+			player.StrMap["onGround"] = Value{Kind: ValBool, B: false}
+			return player, nil
+		}
+	case "add":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "entitylist") {
+			if len(args) != 1 {
+				return nil, &RuntimeError{Msg: "EntityList.add(entity)"}
+			}
+			es := m["entities"]
+			es.Elems = append(es.Elems, valueToValue(args[0]))
+			m["entities"] = es
+			return recv, nil
+		}
+	case "where", "filter":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "entitylist") {
+			if len(args) != 1 || args[0] == nil {
+				return nil, &RuntimeError{Msg: "where(filterFn)"}
+			}
+			es := m["entities"]
+			out := make([]Value, 0, len(es.Elems))
+			for i := range es.Elems {
+				it := es.Elems[i]
+				okv, _ := InvokeCallable(args[0], []*Value{ptrVal(it)})
+				if okv != nil && okv.Truthy() {
+					out = append(out, it)
+				}
+			}
+			return &Value{Kind: ValMap, StrMap: map[string]Value{
+				"type":     {Kind: ValString, Str: "EntityList"},
+				"entities": {Kind: ValArray, Elems: out},
+			}}, nil
+		}
+	case "all", "any":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "entitylist") {
+			if len(args) != 1 || args[0] == nil {
+				return nil, &RuntimeError{Msg: "all/any(predicateFn)"}
+			}
+			es := m["entities"]
+			wantAll := ln == "all"
+			result := wantAll
+			for i := range es.Elems {
+				it := es.Elems[i]
+				okv, _ := InvokeCallable(args[0], []*Value{ptrVal(it)})
+				tr := okv != nil && okv.Truthy()
+				if wantAll && !tr {
+					result = false
+					break
+				}
+				if !wantAll && tr {
+					result = true
+					break
+				}
+				if !wantAll {
+					result = false
+				}
+			}
+			return &Value{Kind: ValBool, B: result}, nil
+		}
+	case "draw":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString {
+			switch strings.ToLower(mtype.Str) {
+			case "entitylist":
+				es := m["entities"]
+				for i := range es.Elems {
+					it := es.Elems[i]
+					if it.Kind == ValMap {
+						tmp := it
+						_, _ = callMapMethod(&tmp, "draw", nil, e)
+					}
+				}
+				return recv, nil
+			case "uilayout", "hud":
+				// hud.update(dt) could handle animations or auto-layouts
+				return recv, nil
+			}
+		}
+	case "text", "topleft", "topcenter", "center", "bottomleft":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString {
+			if strings.EqualFold(mtype.Str, "uilayout") || strings.EqualFold(mtype.Str, "hud") {
+				if len(args) >= 1 && args[0] != nil {
+					txt := args[0]
+					x := m["padding"]
+					y := m["padding"]
+					if x.Kind != ValInt { x = Value{Kind: ValInt, I64: 20} }
+					if y.Kind != ValInt { y = Value{Kind: ValInt, I64: 20} }
+					
+					if fn, ok := Builtins["drawtext"]; ok {
+						size := Value{Kind: ValInt, I64: 24}
+						col := Value{Kind: ValString, Str: "white"}
+						_, _ = fn([]*Value{txt, &x, &y, &size, &col})
+					}
+				}
+				return recv, nil
+			}
+		}
+	case "goto":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "statemachine") {
+			if len(args) == 1 && args[0] != nil && args[0].Kind == ValString {
+				m["current"] = *args[0]
+			}
+			return recv, nil
+		}
+	case "state":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "statemachine") {
+			// state(name, mapWithCallbacks)
+			if len(args) == 2 && args[0] != nil && args[0].Kind == ValString && args[1] != nil && args[1].Kind == ValMap {
+				st := m["states"]
+				if st.Kind != ValMap || st.StrMap == nil {
+					st = Value{Kind: ValMap, StrMap: map[string]Value{}}
+				}
+				st.StrMap[args[0].Str] = valueToValue(args[1])
+				m["states"] = st
+			}
+			return recv, nil
+		}
+	case "save", "restore", "reset":
+		if len(args) >= 0 {
+			if ln == "save" {
+				return deepCloneValue(recv), nil
+			}
+			if ln == "restore" && len(args) == 1 && args[0] != nil {
+				clone := deepCloneValue(args[0])
+				*recv = *clone
+				return recv, nil
+			}
+			if ln == "reset" {
+				if initv, ok := m["_initial"]; ok {
+					cv := initv
+					*recv = cv
+				}
+				return recv, nil
+			}
+		}
+	case "animate", "patrol":
+		if len(args) >= 0 {
+			// marker no-op behavior for now
+			return recv, nil
+		}
+	case "rotatevector":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "transform") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValVec {
+				return nil, &RuntimeError{Msg: "rotateVector(vec)"}
+			}
+			ang := m["rotation"]
+			if ang.Kind != ValFloat {
+				return args[0], nil
+			}
+			if len(args[0].Vec) == 2 {
+				x := args[0].Vec[0]
+				y := args[0].Vec[1]
+				c := mathCos(ang.F64)
+				s := mathSin(ang.F64)
+				return &Value{Kind: ValVec, Vec: []float64{x*c - y*s, x*s + y*c}}, nil
+			}
+			return args[0], nil
+		}
+	case "overlaps":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString {
+			switch strings.ToLower(mtype.Str) {
+			case "aabb":
+				if len(args) != 1 || args[0] == nil || args[0].Kind != ValMap {
+					return nil, &RuntimeError{Msg: "AABB.overlaps expects one AABB"}
+				}
+				return aabbOverlapsMap(recv, args[0])
+			case "sphere":
+				if len(args) != 1 || args[0] == nil || args[0].Kind != ValMap {
+					return nil, &RuntimeError{Msg: "Sphere.overlaps expects one Sphere"}
+				}
+				return sphereOverlapsMap(recv, args[0])
+			}
+		}
+		return nil, &RuntimeError{Msg: "map.overlaps is only available on physics types"}
+	case "intersects":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "ray") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValMap {
+				return nil, &RuntimeError{Msg: "Ray.intersects expects one AABB"}
+			}
+			return rayIntersectsAABB(recv, args[0])
+		}
+		return nil, &RuntimeError{Msg: "map.intersects is only available on Ray"}
 	case "keys", "key_list":
 		ks := make([]string, 0, len(m))
 		for k := range m {
@@ -392,6 +999,11 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 		}
 		return &Value{Kind: ValArray, Elems: out}, nil
 	case "has", "contains", "include":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "aabb") {
+			if len(args) == 1 && args[0] != nil && args[0].Kind == ValVec {
+				return aabbContainsPoint(recv, args[0])
+			}
+		}
 		if len(args) < 1 {
 			return nil, &RuntimeError{Msg: "has: one key"}
 		}
@@ -468,6 +1080,7 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 	default:
 		return nil, &RuntimeError{Msg: "map has no method: " + name}
 	}
+	return nil, &RuntimeError{Msg: "map has no method: " + name}
 }
 
 // asInt64Value coerces a value to int index (for list insert/remove).
@@ -511,6 +1124,19 @@ func valueOrderLessForSort(a, b *Value) bool {
 	return a.String() < b.String()
 }
 
+func clampFloat(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func mathCos(v float64) float64 { return math.Cos(v) }
+func mathSin(v float64) float64 { return math.Sin(v) }
+
 func callStringMethod(recv *Value, name string, argExprs []candy_ast.Expression, e *Env) (*Value, error) {
 	if recv == nil || recv.Kind != ValString {
 		return nil, &RuntimeError{Msg: "string method: need string"}
@@ -531,7 +1157,16 @@ func callStringMethod(recv *Value, name string, argExprs []candy_ast.Expression,
 		if len(args) >= 1 && args[0] != nil && args[0].Kind == ValString {
 			sep = args[0].Str
 		}
-		parts := strings.Split(s, sep)
+		n := -1
+		if len(args) >= 2 && args[1] != nil && args[1].Kind == ValInt {
+			n = int(args[1].I64)
+		}
+		var parts []string
+		if n < 0 {
+			parts = strings.Split(s, sep)
+		} else {
+			parts = strings.SplitN(s, sep, n+1)
+		}
 		out := make([]Value, len(parts))
 		for i, p := range parts {
 			out[i] = Value{Kind: ValString, Str: p}

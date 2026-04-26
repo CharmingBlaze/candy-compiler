@@ -168,6 +168,7 @@ var Builtins = map[string]func(args []*Value) (*Value, error){
 	"random":    builtinRandomInt, // alias for random.int
 	"array":     builtinArray,
 	"bytes":     builtinBytes,
+	"noise":     builtinNoise,
 }
 
 func builtinInput(args []*Value) (*Value, error) {

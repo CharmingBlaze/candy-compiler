@@ -1,6 +1,9 @@
 package candy_evaluator
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 // registerPrelude injects stdlib module objects and top-level constants (PI, E).
 // Called at the start of Eval() so each run has a known surface.
@@ -18,8 +21,25 @@ func registerPrelude(e *Env) {
 	e.Set("E", ee)
 	e.Set("pi", pi)
 	e.Set("e", ee)
+	e.Set("infinity", inf)
+	e.Set("Infinity", inf)
 
 	// Keys
+	keys := map[string]int{
+		"KEY_W": 87, "KEY_A": 65, "KEY_S": 83, "KEY_D": 68,
+		"KEY_SPACE": 32, "KEY_ESCAPE": 256, "KEY_ENTER": 257,
+		"KEY_LEFT": 263, "KEY_RIGHT": 262, "KEY_UP": 265, "KEY_DOWN": 264,
+		// Common gamepad aliases for scripts that use keyboard+pad fallbacks.
+		// InputMap currently consumes integer codes via isKeyDown/isKeyPressed.
+		"GAMEPAD_BUTTON_A": 32,
+		"GAMEPAD_BUTTON_B": 257,
+		"GAMEPAD_BUTTON_X": 65,
+		"GAMEPAD_BUTTON_Y": 87,
+	}
+	for k, v := range keys {
+		e.Set(k, &Value{Kind: ValInt, I64: int64(v)})
+		e.Set(strings.ToLower(k), &Value{Kind: ValInt, I64: int64(v)})
+	}
 	e.Set("left", &Value{Kind: ValString, Str: "LEFT"})
 	e.Set("right", &Value{Kind: ValString, Str: "RIGHT"})
 	e.Set("up", &Value{Kind: ValString, Str: "UP"})
@@ -28,19 +48,16 @@ func registerPrelude(e *Env) {
 	e.Set("key_esc", &Value{Kind: ValString, Str: "ESC"})
 
 	// Colors
-	e.Set("white", &Value{Kind: ValString, Str: "WHITE"})
-	e.Set("black", &Value{Kind: ValString, Str: "BLACK"})
-	e.Set("gray", &Value{Kind: ValString, Str: "GRAY"})
-	e.Set("red", &Value{Kind: ValString, Str: "RED"})
-	e.Set("green", &Value{Kind: ValString, Str: "GREEN"})
-	e.Set("blue", &Value{Kind: ValString, Str: "BLUE"})
-	e.Set("yellow", &Value{Kind: ValString, Str: "YELLOW"})
-	e.Set("gold", &Value{Kind: ValString, Str: "GOLD"})
-	e.Set("orange", &Value{Kind: ValString, Str: "ORANGE"})
-	e.Set("pink", &Value{Kind: ValString, Str: "PINK"})
-	e.Set("purple", &Value{Kind: ValString, Str: "PURPLE"})
-	e.Set("skyblue", &Value{Kind: ValString, Str: "SKYBLUE"})
-	e.Set("brown", &Value{Kind: ValString, Str: "BROWN"})
+	colors := []string{"white", "black", "gray", "red", "green", "blue", "yellow", "gold", "orange", "pink", "purple", "skyblue", "brown", "darkgray", "maroon"}
+	colorConsts := make(map[string]*Value)
+	for _, c := range colors {
+		val := &Value{Kind: ValString, Str: c}
+		e.Set(c, val)
+		colorName := "COLOR_" + strings.ToUpper(c)
+		e.Set(colorName, val)
+		e.Set(strings.ToLower(colorName), val)
+		colorConsts[strings.ToUpper(c)] = val
+	}
 
 	mathFn := map[string]func(args []*Value) (*Value, error){
 		"sqrt":  builtinSqrt,
@@ -55,6 +72,7 @@ func registerPrelude(e *Env) {
 		"min":   builtinMin,
 		"max":   builtinMax,
 		"clamp": builtinClamp,
+		"isInfinite": builtinIsInfinite,
 	}
 	mathC := map[string]*Value{
 		"PI":  pi,
@@ -62,6 +80,7 @@ func registerPrelude(e *Env) {
 		"pi":  pi,
 		"e":   ee,
 		"Inf": inf,
+		"infinity": inf,
 	}
 	e.Set("math", newModule("math", mathFn, mathC))
 
@@ -92,7 +111,9 @@ func registerPrelude(e *Env) {
 
 	jsonFn := map[string]func(args []*Value) (*Value, error){
 		"parse":     builtinJsonParse,
+		"decode":    builtinJsonParse,
 		"stringify": builtinJsonStringify,
+		"encode":    builtinJsonStringify,
 		"load":      builtinLoadJSON,
 		"load_file": builtinLoadJSON,
 		"loadFile":  builtinLoadJSON,
@@ -173,12 +194,14 @@ func registerPrelude(e *Env) {
 	e.Set("collections", newModule("collections", collectionsFn, nil))
 
 	colorFn := map[string]func(args []*Value) (*Value, error){
-		"rgb":  builtinColorRGB,
-		"rgba": builtinColorRGBA,
-		"hex":  builtinColorHex,
-		"lerp": builtinColorLerp,
+		"rgb":    builtinColorRGB,
+		"rgba":   builtinColorRGBA,
+		"hex":    builtinColorHex,
+		"lerp":   builtinColorLerp,
+		"random": builtinColorRandom,
 	}
-	e.Set("color", newModule("color", colorFn, nil))
+	e.Set("color", newModule("color", colorFn, colorConsts))
+	e.Set("Color", e.Store["color"]) // Alias for documentation parity
 
 	registerENetModule(e)
 }

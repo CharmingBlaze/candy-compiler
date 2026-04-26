@@ -1,0 +1,57 @@
+import "std/io"
+import "std/time"
+import "std/json"
+import "std/collections"
+import "std/concurrent"
+import "std/result"
+import "std/ffi"
+import candy.camera
+import candy.ai
+
+fun runMarker() {
+    printLine("run ok")
+    return true
+}
+
+fun delayMarker() {
+    printLine("delay ok")
+    return true
+}
+
+fun main() {
+    printLine("surface smoke start")
+    var t0 = nowMillis()
+    sleepMs(1)
+    var t1 = nowMillis()
+    if t0 == null or t1 == null { printLine("time api failed"); }
+
+    var txt = stringify({"x": 1})
+    if txt == null { printLine("json stringify failed"); }
+
+    var q = queue([1,2,3])
+    if len(q) == 0 { printLine("queue failed"); }
+
+    var okRes = {"ok": true}
+    if !isOk(okRes) { printLine("result isOk failed"); }
+    if isErr(okRes) { printLine("result isErr failed"); }
+
+    if available() { printLine("ffi unexpectedly available"); }
+    start(runMarker)
+    delay(1, delayMarker)
+
+    var cam = Camera2D()
+    cam.zoom = 2.0
+    cam.position = vec2(10, 20)
+    var sp = cam.worldToScreen(vec2(20, 30))
+    var wp = cam.screenToWorld(sp)
+    if wp == null { printLine("camera conversion failed"); }
+
+    var agent = SteeringAgent()
+    agent.init({"position": vec2(0, 0), "maxSpeed": 50, "maxForce": 20})
+    agent.applyForce(agent.wander())
+    agent.update(0.016)
+
+    printLine("surface smoke ok")
+}
+
+main()

@@ -19,6 +19,7 @@ const (
 	ValMap
 	ValFunction
 	ValStruct
+	ValVec
 	ValResult // Result<T, E> tagged
 	ValModule // built-in stdlib group (e.g. math) — method calls go to host functions
 )
@@ -39,6 +40,7 @@ type Value struct {
 	// Result<T,E> stored as: Res field + union with Err Value
 	Res, Err *Value
 	Builtin  func(args []*Value) (*Value, error)
+	Vec      []float64
 }
 
 // String for debugging
@@ -95,6 +97,13 @@ func (v Value) String() string {
 			n = v.St.Def.Name.Value
 		}
 		return fmt.Sprintf("struct(%s){%d fields}", n, len(v.St.Data))
+	}
+	if v.Kind == ValVec {
+		parts := make([]string, 0, len(v.Vec))
+		for _, x := range v.Vec {
+			parts = append(parts, fmt.Sprintf("%g", x))
+		}
+		return "vec(" + strings.Join(parts, ", ") + ")"
 	}
 	if v.Kind == ValResult {
 		if v.ResOk {

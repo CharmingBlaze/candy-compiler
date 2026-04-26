@@ -49,6 +49,8 @@ const (
 	SEMICOLON = ";"
 	COLON     = ":"
 	QUESTION  = "?"
+	OR_ASSIGN = "||="
+	NULL_COALESCE_ASSIGN = "??="
 
 	LPAREN = "("
 	RPAREN = ")"
@@ -67,6 +69,7 @@ const (
 	ELSE      = "ELSE"
 	RETURN    = "RETURN"
 	IMPORT    = "IMPORT"
+	FROM      = "FROM"
 	STRUCT    = "STRUCT"
 	NULL      = "NULL"
 	NEW       = "NEW"
@@ -154,6 +157,8 @@ const (
 
 	REPEAT = "REPEAT"
 	LOOP   = "LOOP"
+	SUPER  = "SUPER"
+	PIPELINE = "|>"
 )
 
 var keywords = map[string]TokenType{
@@ -168,6 +173,7 @@ var keywords = map[string]TokenType{
 	"else":      ELSE,
 	"return":    RETURN,
 	"import":    IMPORT,
+	"from":      FROM,
 	"struct":    STRUCT,
 	"new":       NEW,
 	"null":      NULL,
@@ -237,6 +243,7 @@ var keywords = map[string]TokenType{
 	"delete":    DELETE,
 	"repeat":    REPEAT,
 	"loop":      LOOP,
+	"super":     SUPER,
 }
 
 func LookupIdent(ident string) TokenType {

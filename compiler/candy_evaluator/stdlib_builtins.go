@@ -373,6 +373,20 @@ func builtinClamp(args []*Value) (*Value, error) {
 	return &Value{Kind: ValFloat, F64: v}, nil
 }
 
+func builtinIsInfinite(args []*Value) (*Value, error) {
+	if len(args) != 1 || args[0] == nil {
+		return &Value{Kind: ValBool, B: false}, nil
+	}
+	switch args[0].Kind {
+	case ValFloat:
+		return &Value{Kind: ValBool, B: math.IsInf(args[0].F64, 0)}, nil
+	case ValInt:
+		return &Value{Kind: ValBool, B: false}, nil
+	default:
+		return &Value{Kind: ValBool, B: false}, nil
+	}
+}
+
 func builtinLerp(args []*Value) (*Value, error) {
 	if len(args) != 3 {
 		return nil, fmt.Errorf("lerp: a, b, t")
@@ -1048,6 +1062,12 @@ func builtinColorHex(args []*Value) (*Value, error) {
 	return newColorValue(r, g, b, alpha), nil
 }
 
+func builtinColorRandom(args []*Value) (*Value, error) {
+	colors := []string{"white", "black", "gray", "red", "green", "blue", "yellow", "gold", "orange", "pink", "purple", "skyblue", "brown", "darkgray", "maroon"}
+	c := colors[rng.Intn(len(colors))]
+	return &Value{Kind: ValString, Str: c}, nil
+}
+
 func builtinReadLine(args []*Value) (*Value, error) {
 	if len(args) != 0 {
 		return nil, fmt.Errorf("readLine expects 0 arguments")
@@ -1075,6 +1095,64 @@ func builtinParseInt(args []*Value) (*Value, error) {
 		return nil, err
 	}
 	return &Value{Kind: ValInt, I64: n}, nil
+}
+
+func builtinNoise(args []*Value) (*Value, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("noise: expected (x, [y, z])")
+	}
+	x, _ := f64Arg(args[0])
+	y := 0.0
+	if len(args) >= 2 {
+		y, _ = f64Arg(args[1])
+	}
+	z := 0.0
+	if len(args) >= 3 {
+		z, _ = f64Arg(args[2])
+	}
+
+	// Simple pseudo-random hash-based noise
+	hash := func(ix, iy, iz int64) float64 {
+		n := ix + iy*57 + iz*113
+		n = (n << 13) ^ n
+		res := 1.0 - float64((n*(n*n*15731+789221)+1376312589)&0x7fffffff)/1073741824.0
+		return res
+	}
+
+	lerp := func(a, b, t float64) float64 { return a + t*(b-a) }
+	smooth := func(t float64) float64 { return t * t * (3 - 2*t) }
+
+	ix := int64(math.Floor(x))
+	iy := int64(math.Floor(y))
+	iz := int64(math.Floor(z))
+	fx := x - math.Floor(x)
+	fy := y - math.Floor(y)
+	fz := z - math.Floor(z)
+
+	sx := smooth(fx)
+	sy := smooth(fy)
+	sz := smooth(fz)
+
+	n000 := hash(ix, iy, iz)
+	n100 := hash(ix+1, iy, iz)
+	n010 := hash(ix, iy+1, iz)
+	n110 := hash(ix+1, iy+1, iz)
+	n001 := hash(ix, iy, iz+1)
+	n101 := hash(ix+1, iy, iz+1)
+	n011 := hash(ix, iy+1, iz+1)
+	n111 := hash(ix+1, iy+1, iz+1)
+
+	nx00 := lerp(n000, n100, sx)
+	nx10 := lerp(n010, n110, sx)
+	nx01 := lerp(n001, n101, sx)
+	nx11 := lerp(n011, n111, sx)
+
+	nxy0 := lerp(nx00, nx10, sy)
+	nxy1 := lerp(nx01, nx11, sy)
+
+	nxyz := lerp(nxy0, nxy1, sz)
+
+	return &Value{Kind: ValFloat, F64: (nxyz + 1.0) / 2.0}, nil
 }
 
 func builtinToUpper(args []*Value) (*Value, error) {
@@ -1281,7 +1359,7 @@ func init() {
 		"sqrt":         builtinSqrt, "abs": builtinAbsF,
 		"pow":  builtinPow, "floor": builtinFloor, "ceil":  builtinCeil, "round":  builtinRound,
 		"sin": builtinSin, "cos": builtinCos, "tan": builtinTan, "lerp": builtinLerp,
-		"min": builtinMin, "max": builtinMax, "clamp": builtinClamp,
+		"min": builtinMin, "max": builtinMax, "clamp": builtinClamp, "isInfinite": builtinIsInfinite, "isinfinite": builtinIsInfinite,
 		"random":       builtinRandomInt, "randomInt":  builtinRandomInt, "rand_int": builtinRandomInt,
 		"random_float": builtinRandomFloat, "randomFloat": builtinRandomFloat, "rand_float": builtinRandomFloat,
 		"choose":  builtinChoose,

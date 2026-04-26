@@ -149,6 +149,19 @@ func (p *Parser) parseIfExpression() candy_ast.Expression {
 	}
 	if p.curTokenIs(candy_token.LBRACE) {
 		expr.Consequence = p.parseBlockStatement()
+	} else if p.peekTokenIs(candy_token.THEN) || p.curTokenIs(candy_token.THEN) {
+		if p.curTokenIs(candy_token.THEN) {
+			p.nextToken()
+		} else {
+			p.nextToken()
+			p.nextToken()
+		}
+		expr.Consequence = &candy_ast.ExpressionStatement{Token: p.curToken, Expression: p.parseExpression(LOWEST)}
+		if p.peekTokenIs(candy_token.ELSE) {
+			p.nextToken()
+			p.nextToken()
+			expr.Alternative = &candy_ast.ExpressionStatement{Token: p.curToken, Expression: p.parseExpression(LOWEST)}
+		}
 	} else if p.expectPeek(candy_token.LBRACE) {
 		expr.Consequence = p.parseBlockStatement()
 	} else {
@@ -174,7 +187,7 @@ func (p *Parser) parseStructLiteralExpr(name candy_ast.Expression) candy_ast.Exp
 	p.nextToken() // skip {
 
 	for !p.curTokenIs(candy_token.RBRACE) && !p.curTokenIs(candy_token.EOF) {
-		if !p.curTokenIs(candy_token.IDENT) {
+		if !p.curTokenIs(candy_token.IDENT) && !p.isKeyword(p.curToken.Type) {
 			p.addErrorf("expected field name, got %s", p.curToken.Type)
 			return nil
 		}
@@ -195,10 +208,10 @@ func (p *Parser) parseStructLiteralExpr(name candy_ast.Expression) candy_ast.Exp
 		}
 	}
 
-	if !p.expect(candy_token.RBRACE) {
+	if !p.curTokenIs(candy_token.RBRACE) {
+		p.addErrorf("expected }, got %s", p.curToken.Type)
 		return nil
 	}
-
 	return sl
 }
 
@@ -213,13 +226,14 @@ func (p *Parser) parseCallExpression(fn candy_ast.Expression) candy_ast.Expressi
 				p.nextToken()
 			}
 		}
-		if !p.expect(candy_token.GT) {
+		if !p.expectPeek(candy_token.GT) {
 			return nil
 		}
-		if !p.curTokenIs(candy_token.LPAREN) {
+		if !p.peekTokenIs(candy_token.LPAREN) {
 			p.addErrorf("expected ( after generic type params")
 			return nil
 		}
+		p.nextToken() // move to (
 	}
 
 	return &candy_ast.CallExpression{Token: tok, Function: fn, TypeArguments: typeArgs, Arguments: p.parseCallArgs()}
@@ -233,6 +247,34 @@ func (p *Parser) parseDotExpression(left candy_ast.Expression) candy_ast.Express
 	return &candy_ast.DotExpression{Token: tok, Left: left, Right: id, IsSafe: isSafe}
 }
 
+func (p *Parser) parseSafeAccessExpression(left candy_ast.Expression) candy_ast.Expression {
+	tok := p.curToken // ?.
+	if p.peekTokenIs(candy_token.LPAREN) {
+		p.nextToken() // (
+		return &candy_ast.CallExpression{
+			Token:     tok,
+			Function:  left,
+			Arguments: p.parseCallArgs(),
+			IsSafe:    true,
+		}
+	}
+	if p.peekTokenIs(candy_token.LBRACK) {
+		p.nextToken() // [
+		p.nextToken() // first token inside []
+		idx := p.parseExpression(LOWEST)
+		if !p.expectPeek(candy_token.RBRACK) {
+			return nil
+		}
+		return &candy_ast.IndexExpression{
+			Token:  tok,
+			Base:   left,
+			Index:  idx,
+			IsSafe: true,
+		}
+	}
+	return p.parseDotExpression(left)
+}
+
 func (p *Parser) parseCallArgs() []candy_ast.Expression {
 	args := []candy_ast.Expression{}
 	if p.peekTokenIs(candy_token.RPAREN) {
@@ -240,16 +282,48 @@ func (p *Parser) parseCallArgs() []candy_ast.Expression {
 		return args
 	}
 	p.nextToken()
-	args = append(args, p.parseExpression(TUPLE))
+	args = append(args, p.parseSingleCallArg())
 	for p.peekTokenIs(candy_token.COMMA) {
 		p.nextToken()
 		p.nextToken()
-		args = append(args, p.parseExpression(TUPLE))
+		args = append(args, p.parseSingleCallArg())
+	}
+	// Allow semicolon insertion before closing ')' in multiline argument lists.
+	for p.peekTokenIs(candy_token.SEMICOLON) {
+		p.nextToken()
+	}
+	if p.peekTokenIs(candy_token.RPAREN) {
+		p.nextToken()
+		return args
+	}
+	// Recovery for legacy `Type { ... }` call-arg style where semicolon insertion
+	// can consume/skip the closing ')' token in some newline forms.
+	if p.peekTokenIs(candy_token.EOF) || p.peekTokenIs(candy_token.RBRACE) || p.isStatementStart(p.peekToken.Type) {
+		return args
 	}
 	if !p.expectPeek(candy_token.RPAREN) {
 		return nil
 	}
 	return args
+}
+
+func (p *Parser) parseSingleCallArg() candy_ast.Expression {
+	if p.curTokenIs(candy_token.IDENT) && p.peekTokenIs(candy_token.COLON) {
+		namedTok := p.curToken
+		name := &candy_ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		p.nextToken() // :
+		p.nextToken() // value
+		// Parse with TUPLE precedence so lambda arrows inside args are accepted
+		// while commas still terminate the argument.
+		val := p.parseExpression(TUPLE)
+		return &candy_ast.NamedArgumentExpression{
+			Token: namedTok,
+			Name:  name,
+			Value: val,
+		}
+	}
+	// Parse with TUPLE precedence so `x => ...` is parsed as a lambda argument.
+	return p.parseExpression(TUPLE)
 }
 
 func (p *Parser) parseIndexExpression(left candy_ast.Expression) candy_ast.Expression {
@@ -333,11 +407,16 @@ func (p *Parser) parseStringLiteral() candy_ast.Expression {
 
 		if end != -1 {
 			exprStr := current[start+1 : end]
-			// Parse the expression inside braces
-			innerParser := New(candy_lexer.New(exprStr))
-			expr := innerParser.parseExpression(LOWEST)
-			if expr != nil {
-				parts = append(parts, expr)
+			if len(strings.TrimSpace(exprStr)) == 0 {
+				// Handle empty {} as literal for use with format()
+				parts = append(parts, &candy_ast.StringLiteral{Token: tok, Value: "{}"})
+			} else {
+				// Parse the expression inside braces
+				innerParser := New(candy_lexer.New(exprStr))
+				expr := innerParser.parseExpression(LOWEST)
+				if expr != nil {
+					parts = append(parts, expr)
+				}
 			}
 			current = current[end+1:]
 		} else {
@@ -386,12 +465,12 @@ func (p *Parser) parseArrayLiteral() candy_ast.Expression {
 	for {
 		el = append(el, p.parseExpression(TUPLE))
 		if p.peekTokenIs(candy_token.RBRACK) {
-			p.nextToken()
+			p.nextToken() // move to ]
 			return &candy_ast.ArrayLiteral{Token: tok, Elem: el}
 		}
 		if p.peekTokenIs(candy_token.COMMA) {
-			p.nextToken()
-			p.nextToken()
+			p.nextToken() // to ,
+			p.nextToken() // past ,
 			continue
 		}
 		if !p.expectPeek(candy_token.RBRACK) {
@@ -449,7 +528,10 @@ func (p *Parser) parseMapLiteral() candy_ast.Expression {
 			break
 		}
 	}
-	_ = p.expect(candy_token.RBRACE)
+	if !p.curTokenIs(candy_token.RBRACE) {
+		p.addErrorf("expected }, got %s", p.curToken.Type)
+		return nil
+	}
 	return &candy_ast.MapLiteral{Token: tok, Pairs: pairs}
 }
 
@@ -461,14 +543,25 @@ func (p *Parser) parseBraceMapLiteral() candy_ast.Expression {
 	var pairs []candy_ast.MapPair
 	for !p.curTokenIs(candy_token.RBRACE) && !p.curTokenIs(candy_token.EOF) {
 		var ke candy_ast.Expression
-		if p.curTokenIs(candy_token.IDENT) {
+		var shorthandIdent *candy_ast.Identifier
+		if p.curTokenIs(candy_token.IDENT) || p.isKeyword(p.curToken.Type) {
 			ke = &candy_ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+			shorthandIdent = &candy_ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 		} else {
 			ke = p.parseExpression(LOWEST)
 		}
 		if p.peekTokenIs(candy_token.RBRACE) {
+			if shorthandIdent != nil {
+				pairs = append(pairs, candy_ast.MapPair{Key: ke, Value: shorthandIdent})
+			}
 			p.nextToken()
 			break
+		}
+		if shorthandIdent != nil && p.peekTokenIs(candy_token.COMMA) {
+			pairs = append(pairs, candy_ast.MapPair{Key: ke, Value: shorthandIdent})
+			p.nextToken()
+			p.nextToken()
+			continue
 		}
 		if !p.expectPeek(candy_token.COLON) {
 			break
@@ -486,7 +579,10 @@ func (p *Parser) parseBraceMapLiteral() candy_ast.Expression {
 			break
 		}
 	}
-	_ = p.expect(candy_token.RBRACE)
+	if !p.curTokenIs(candy_token.RBRACE) {
+		p.addErrorf("expected }, got %s", p.curToken.Type)
+		return nil
+	}
 	return &candy_ast.MapLiteral{Token: tok, Pairs: pairs}
 }
 
@@ -520,4 +616,28 @@ func (p *Parser) parseTernaryExpression(condition candy_ast.Expression) candy_as
 	expr.Alternative = p.parseExpression(TERNARY)
 
 	return expr
+}
+
+func (p *Parser) parsePipelineExpression(left candy_ast.Expression) candy_ast.Expression {
+	tok := p.curToken
+	p.nextToken() // past |>
+	right := p.parseExpression(PIPELINE)
+
+	if right == nil {
+		return left
+	}
+
+	// Desugar: left |> right(...) => right(left, ...)
+	// If right is already a CallExpression, prepend left to its arguments.
+	if call, ok := right.(*candy_ast.CallExpression); ok {
+		call.Arguments = append([]candy_ast.Expression{left}, call.Arguments...)
+		return call
+	}
+
+	// Otherwise, wrap it in a call: left |> right => right(left)
+	return &candy_ast.CallExpression{
+		Token:     tok,
+		Function:  right,
+		Arguments: []candy_ast.Expression{left},
+	}
 }

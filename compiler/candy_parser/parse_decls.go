@@ -81,6 +81,14 @@ func (p *Parser) parseObjectStatement() *candy_ast.ObjectStatement {
 	}
 	s.Name = &candy_ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 
+	if p.peekTokenIs(candy_token.EXTENDS) {
+		p.nextToken()
+		if !p.expectPeek(candy_token.IDENT) {
+			return nil
+		}
+		s.Base = &candy_ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	}
+
 	if p.peekTokenIs(candy_token.LBRACE) {
 		p.nextToken()
 		s.Members = p.parseClassMembers()

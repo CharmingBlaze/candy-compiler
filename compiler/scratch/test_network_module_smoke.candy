@@ -1,0 +1,52 @@
+import candy.network
+
+var serverCount = 0
+var clientCount = 0
+
+fun onServerPing(peerId, payload) {
+    serverCount = serverCount + 1
+}
+
+fun onClientPong(payload) {
+    clientCount = clientCount + 1
+}
+
+fun main() {
+    var server = NetworkServer(19321, 8, 2)
+    server.on("ping", onServerPing)
+
+    var client = NetworkClient(2)
+    client.on("pong", onClientPong)
+    client.connect("127.0.0.1", 19321, 2)
+
+    var i = 0
+    while i < 20 {
+        server.update(5)
+        client.update(5)
+        i = i + 1
+    }
+
+    client.send("ping", {"n": 1})
+    i = 0
+    while i < 20 {
+        server.update(5)
+        client.update(5)
+        i = i + 1
+    }
+
+    server.broadcast("pong", {"ok": true})
+    i = 0
+    while i < 20 {
+        server.update(5)
+        client.update(5)
+        i = i + 1
+    }
+
+    print("server_count={serverCount}")
+    print("client_count={clientCount}")
+
+    client.stop()
+    server.stop()
+}
+
+main()

@@ -1,0 +1,5 @@
+object Input {
+    var mappings = {}
+    fun bind(a, b) { print("bind"); }
+}
+Input.bind(1, 2)

@@ -1,0 +1,68 @@
+import candy.2d
+import candy.3d
+import candy.physics2d
+import candy.physics3d
+import candy.ui
+import candy.scene
+import candy.camera
+import candy.ai
+import candy.game3d
+
+fun main() {
+    print("start")
+    var s = Sprite()
+    s.position = vec2(10, 20)
+    s.update(0.016)
+    print("2d ok")
+
+    var e3 = Entity3D()
+    e3.translate(vec3(1, 0, 0))
+    e3.rotate(vec3(0, 1, 0), 30.0)
+    print("3d entity ok")
+
+    var cam = OrbitCamera()
+    cam.target = vec3(0, 1, 0)
+    cam.update(0.016)
+    print("orbit ok")
+
+    var cc = CharacterController3D()
+    cc.move(vec3(1, 0, 0), 4.0, 0.016)
+    cc.jump()
+    print("cc ok")
+
+    var p2 = Physics2D()
+    var rb2 = RigidBody2D()
+    rb2.applyForce(vec2(10, -5))
+    p2.add(rb2)
+    p2.update(0.016)
+    var h2 = p2.raycast(vec2(0, 0), vec2(50, 0))
+    if h2 != null and h2.point == null { print("unexpected 2d hit"); }
+    print("physics2d ok")
+
+    var rig = ThirdPersonRig(null)
+    rig.update(0.016)
+    var world = PlatformWorld3D()
+    world.addBox(0, 0.5, 0, 2, 1, 2)
+    var pos = vec3(0, 2, 0)
+    var sz = vec3(1, 2, 1)
+    var vel = vec3(0, -3, 0)
+    world.solveAABB(pos, sz, vel)
+    var p3 = Physics3D()
+    var rb3 = RigidBody3D()
+    rb3.position = vec3(0, 0, 5)
+    p3.add(rb3)
+    var h3 = p3.raycast(vec3(0, 0, 0), vec3(0, 0, 10))
+    if h3 != null and h3.point == null { print("unexpected 3d hit"); }
+    print("game3d ok")
+
+    var agent = SteeringAgent()
+    agent.init({})
+    var steer = agent.seek(vec2(10, 5))
+    agent.applyForce(steer)
+    agent.update(0.016)
+    print("ai ok")
+
+    print("runtime smoke ok")
+}
+
+main()

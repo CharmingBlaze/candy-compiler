@@ -79,7 +79,7 @@ func formatParseErrors(origin string, diags []candy_report.Diagnostic) error {
 		if i > 0 {
 			b.WriteString("; ")
 		}
-		b.WriteString(d.Message)
+		b.WriteString(fmt.Sprintf("%d:%d: %s", d.Line, d.Col, d.Message))
 	}
 	return fmt.Errorf("candy_load: %sparse error: %s", originInfo, b.String())
 }

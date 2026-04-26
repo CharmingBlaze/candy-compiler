@@ -96,16 +96,18 @@ func evalStatement(s candy_ast.Statement, e *Env) (any, error) {
 		e.Defers = append(e.Defers, t)
 		return nil, nil
 	case *candy_ast.ReturnStatement:
-		if t.ReturnValue == nil {
-			return nil, nil
-		}
-		v, err := evalExpression(t.ReturnValue, e)
-		if err != nil {
-			return nil, err
+		v := &Value{Kind: ValNull}
+		var err error
+		if t.ReturnValue != nil {
+			v, err = evalExpression(t.ReturnValue, e)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return ReturnWrap{V: v}, nil
 	case *candy_ast.BlockStatement:
 		ne := e.NewEnclosed()
+		var last any
 		for _, s2 := range t.Statements {
 			if s2 == nil {
 				continue
@@ -124,9 +126,10 @@ func evalStatement(s candy_ast.Statement, e *Env) (any, error) {
 			if c, ok := r.(ContinueWrap); ok {
 				return c, nil
 			}
+			last = r
 		}
 		runDefers(ne)
-		return nil, nil
+		return last, nil
 	case *candy_ast.FunctionStatement:
 		built := &Value{Kind: ValFunction, Fn: &functionVal{Stmt: t, Env: e.NewEnclosed(), Outer: e}}
 		built.Fn.Env.Set(t.Name.Value, built)
@@ -150,7 +153,54 @@ func evalStatement(s candy_ast.Statement, e *Env) (any, error) {
 		}
 		return nil, nil
 	case *candy_ast.ImportStatement:
-		return nil, evalImport(t.Path, e)
+		if t.From != "" {
+			if err := evalImport(t.From, e); err != nil {
+				return nil, err
+			}
+			for _, sym := range t.Symbols {
+				if v, ok := e.Get(sym); ok {
+					e.Set(sym, v)
+					continue
+				}
+				// Resolve from module value if exported as module object.
+				if modv, ok := e.Get(t.From); ok && modv != nil && modv.Kind == ValModule && modv.Mod != nil {
+					if c, ok2 := modv.Mod.Consts[sym]; ok2 && c != nil {
+						e.Set(sym, c)
+						continue
+					}
+					if fn, ok2 := lookupModFn(modv.Mod, sym); ok2 {
+						e.Set(sym, &Value{
+							Kind: ValFunction,
+							Builtin: func(args []*Value) (*Value, error) {
+								return fn(args)
+							},
+						})
+						continue
+					}
+				}
+				return nil, &RuntimeError{Msg: "from-import symbol not found: " + sym}
+			}
+			return nil, nil
+		}
+		if err := evalImport(t.Path, e); err != nil {
+			return nil, err
+		}
+		if t.Alias != "" {
+			if v, ok := e.Get(t.Path); ok && v != nil {
+				e.Set(t.Alias, v)
+			} else {
+				// For common stdlib `import math as m` style, alias existing module name.
+				last := t.Path
+				if strings.Contains(last, ".") {
+					parts := strings.Split(last, ".")
+					last = parts[len(parts)-1]
+				}
+				if v2, ok2 := e.Get(last); ok2 && v2 != nil {
+					e.Set(t.Alias, v2)
+				}
+			}
+		}
+		return nil, nil
 	case *candy_ast.StructStatement:
 		e.Set(t.Name.Value, &Value{Kind: ValStruct, St: &structVal{Def: t, Env: e, Data: make(map[string]Value)}})
 		return nil, nil
@@ -505,22 +555,47 @@ func evalExpression(ex candy_ast.Expression, e *Env) (*Value, error) {
 			return nil, err
 		}
 		for _, b := range t.Branches {
-			p, err2 := evalExpression(b.Pat, e)
-			if err2 != nil {
-				return nil, err2
-			}
-			if valueEqual(sub, p) {
-				return evalExpression(b.Body, e)
+			bindings := make(map[string]*Value)
+			if matchPattern(b.Pat, sub, bindings, e) {
+				ne := e.NewEnclosed()
+				for k, v := range bindings {
+					ne.Set(k, v)
+				}
+				if b.Guard != nil {
+					gv, err3 := evalExpression(b.Guard, ne)
+					if err3 != nil {
+						return nil, err3
+					}
+					if !gv.Truthy() {
+						continue
+					}
+				}
+				return evalExpression(b.Body, ne)
 			}
 		}
 		if t.Default != nil {
 			return evalExpression(t.Default, e)
 		}
 		return &Value{Kind: ValNull}, nil
+	case *candy_ast.IfExpression:
+		res, err := evalStatement(t, e)
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := res.(*Value); ok {
+			return v, nil
+		}
+		return &Value{Kind: ValNull}, nil
 	case *candy_ast.IndexExpression:
 		le, err := evalExpression(t.Base, e)
 		if err != nil {
 			return nil, err
+		}
+		if (le == nil || le.Kind == ValNull) && t.IsSafe {
+			return &Value{Kind: ValNull}, nil
+		}
+		if le == nil {
+			return nil, newError("bad index", t)
 		}
 		if re, ok := t.Index.(*candy_ast.RangeExpression); ok {
 			if le.Kind != ValArray && le.Kind != ValString {
@@ -655,28 +730,58 @@ func evalExpression(ex candy_ast.Expression, e *Env) (*Value, error) {
 		if dot, ok := t.Function.(*candy_ast.DotExpression); ok {
 			return evalMethodCall(dot, t.Arguments, e)
 		}
-		args := make([]*Value, 0, len(t.Arguments))
-		for _, a := range t.Arguments {
-			av, err := evalExpression(a, e)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, av)
+		args, namedArgs, err := evalCallArgs(t.Arguments, e)
+		if err != nil {
+			return nil, err
 		}
 		if id, ok := t.Function.(*candy_ast.Identifier); ok {
-			if f, ok2 := Builtins[strings.ToLower(id.Value)]; ok2 {
-				return f(args)
+			// Prefer lexical bindings only when they are callable targets.
+			// If a non-callable binding shadows a builtin name (e.g. module `random`),
+			// keep builtin-call compatibility for `random(...)`.
+			callableBinding := false
+			if bv, bound := e.Get(id.Value); bound && bv != nil {
+				if (bv.Kind == ValFunction && (bv.Fn != nil || bv.Builtin != nil)) ||
+					(bv.Kind == ValStruct && bv.St != nil && (bv.St.Def != nil || bv.St.ClassDef != nil)) {
+					callableBinding = true
+				}
+			}
+			if !callableBinding {
+				if f, ok2 := Builtins[strings.ToLower(id.Value)]; ok2 {
+					if len(namedArgs) > 0 {
+						return nil, newError("named arguments are only supported for user functions", t)
+					}
+					return f(args)
+				}
+			}
+			// Inside object/class methods, allow bare method calls to resolve on `this`.
+			// Example: `add(entity)` resolves as `this.add(entity)`.
+			if _, okThis := e.Get("this"); okThis {
+				dot := &candy_ast.DotExpression{
+					Token: t.Token,
+					Left:  &candy_ast.Identifier{Token: t.Token, Value: "this"},
+					Right: &candy_ast.Identifier{Token: t.Token, Value: id.Value},
+				}
+				return evalMethodCall(dot, t.Arguments, e)
 			}
 		}
 		fnv, err := evalExpression(t.Function, e)
 		if err != nil {
 			return nil, err
 		}
+		if t.IsSafe && (fnv == nil || fnv.Kind == ValNull) {
+			return &Value{Kind: ValNull}, nil
+		}
 		if fnv == nil {
 			return nil, newError("nil call", t)
 		}
 		if fnv.Kind == ValStruct && (fnv.St.Def != nil || fnv.St.ClassDef != nil) {
 			return instantiateClass(fnv, args, e)
+		}
+		if len(namedArgs) > 0 {
+			if fnv.Kind != ValFunction || fnv.Fn == nil || fnv.Fn.Stmt == nil {
+				return nil, newError("named arguments require a user function call target", t)
+			}
+			args = reorderCallArgs(fnv.Fn.Stmt, args, namedArgs)
 		}
 		return evalUserFunction(fnv, args)
 	default:
@@ -685,7 +790,7 @@ func evalExpression(ex candy_ast.Expression, e *Env) (*Value, error) {
 }
 
 func instantiateClass(def *Value, args []*Value, e *Env) (*Value, error) {
-	instance := &Value{Kind: ValStruct, St: &structVal{Data: make(map[string]Value)}}
+	instance := &Value{Kind: ValStruct, St: &structVal{Data: make(map[string]Value), Env: def.St.Env}}
 	if def.St.Def != nil {
 		instance.St.Def = def.St.Def
 		// existing struct logic...
@@ -693,35 +798,61 @@ func instantiateClass(def *Value, args []*Value, e *Env) (*Value, error) {
 			if i < len(args) {
 				instance.St.Data[p.Name.Value] = *args[i]
 			} else if p.Init != nil {
-				v, _ := evalExpression(p.Init, e)
+				v, _ := evalExpression(p.Init, def.St.Env)
 				instance.St.Data[p.Name.Value] = *v
 			}
 		}
 	} else if def.St.ClassDef != nil {
 		instance.St.ClassDef = def.St.ClassDef
+		// Materialize inherited fields/defaults first so base class state exists.
+		populateClassInstanceData(instance, def.St.ClassDef, def.St.Env, e)
 		// Primary constructor parameters -> Fields
 		for i, p := range def.St.ClassDef.Parameters {
 			if i < len(args) {
 				instance.St.Data[p.Name.Value] = *args[i]
 			} else if p.Default != nil {
-				v, _ := evalExpression(p.Default, e)
-				instance.St.Data[p.Name.Value] = *v
+				v, err := evalExpression(p.Default, def.St.Env)
+				if err != nil {
+					return nil, err
+				}
+				if v != nil {
+					instance.St.Data[p.Name.Value] = *v
+				}
 			}
 		}
 		// Evaluate class body members (fields/methods)
 		for _, m := range def.St.ClassDef.Members {
 			switch st := m.(type) {
 			case *candy_ast.VarStatement:
-				v, _ := evalExpression(st.Value, e)
-				instance.St.Data[st.Name.Value] = *v
+				if st.Name == nil || st.Value == nil {
+					continue
+				}
+				v, err := evalExpression(st.Value, def.St.Env)
+				if err != nil {
+					return nil, err
+				}
+				if v != nil {
+					instance.St.Data[st.Name.Value] = *v
+				}
 			case *candy_ast.ValStatement:
-				v, _ := evalExpression(st.Value, e)
-				instance.St.Data[st.Name.Value] = *v
+				if st.Name == nil || st.Value == nil {
+					continue
+				}
+				v, err := evalExpression(st.Value, def.St.Env)
+				if err != nil {
+					return nil, err
+				}
+				if v != nil {
+					instance.St.Data[st.Name.Value] = *v
+				}
 			case *candy_ast.ExpressionStatement:
 				// Support object/class field initializers written as `x = 0`.
 				if asg, ok := st.Expression.(*candy_ast.AssignExpression); ok {
 					if id, ok2 := asg.Left.(*candy_ast.Identifier); ok2 {
-						v, _ := evalExpression(asg.Value, e)
+						v, err := evalExpression(asg.Value, def.St.Env)
+						if err != nil {
+							return nil, err
+						}
 						if v != nil {
 							instance.St.Data[id.Value] = *v
 						}
@@ -731,7 +862,146 @@ func instantiateClass(def *Value, args []*Value, e *Env) (*Value, error) {
 			// Methods are handled by lookup in ClassDef during evalMethodCall
 		}
 	}
+	// Constructor convention: if class defines `init(...)`, call it after
+	// instance data initialization. This enables patterns like Model("path").
+	if instance.St != nil && instance.St.ClassDef != nil {
+		if err := invokeClassInit(instance, args, e); err != nil {
+			return nil, err
+		}
+	}
 	return instance, nil
+}
+
+func populateClassInstanceData(instance *Value, cls *candy_ast.ClassStatement, classEnv *Env, callEnv *Env) {
+	if instance == nil || instance.St == nil || cls == nil {
+		return
+	}
+	// Base first, then derived overrides.
+	if cls.Base != nil {
+		baseName := cls.Base.Value
+		var baseVal *Value
+		if classEnv != nil {
+			if v, ok := classEnv.Get(baseName); ok {
+				baseVal = v
+			}
+		}
+		if baseVal == nil && callEnv != nil {
+			if v, ok := callEnv.Get(baseName); ok {
+				baseVal = v
+			}
+		}
+		if baseVal != nil && baseVal.Kind == ValStruct && baseVal.St != nil && baseVal.St.ClassDef != nil {
+			populateClassInstanceData(instance, baseVal.St.ClassDef, baseVal.St.Env, callEnv)
+		}
+	}
+	for _, m := range cls.Members {
+		switch st := m.(type) {
+		case *candy_ast.VarStatement:
+			if st.Name == nil || st.Value == nil {
+				continue
+			}
+			v, _ := evalExpression(st.Value, classEnv)
+			if v != nil {
+				instance.St.Data[st.Name.Value] = *v
+			}
+		case *candy_ast.ValStatement:
+			if st.Name == nil || st.Value == nil {
+				continue
+			}
+			v, _ := evalExpression(st.Value, classEnv)
+			if v != nil {
+				instance.St.Data[st.Name.Value] = *v
+			}
+		case *candy_ast.ExpressionStatement:
+			if asg, ok := st.Expression.(*candy_ast.AssignExpression); ok {
+				if id, ok2 := asg.Left.(*candy_ast.Identifier); ok2 {
+					v, _ := evalExpression(asg.Value, classEnv)
+					if v != nil {
+						instance.St.Data[id.Value] = *v
+					}
+				}
+			}
+		}
+	}
+}
+
+func invokeClassInit(instance *Value, args []*Value, outer *Env) error {
+	if instance == nil || instance.St == nil || instance.St.ClassDef == nil {
+		return nil
+	}
+	var initFn *candy_ast.FunctionStatement
+	curr := instance.St.ClassDef
+	for curr != nil && initFn == nil {
+		for _, m := range curr.Members {
+			if fn, ok := m.(*candy_ast.FunctionStatement); ok && fn.Name != nil && strings.EqualFold(fn.Name.Value, "init") {
+				initFn = fn
+				break
+			}
+		}
+		if initFn != nil || curr.Base == nil {
+			break
+		}
+		baseName := curr.Base.Value
+		if baseName == "" {
+			break
+		}
+		if outer != nil {
+			if baseVal, ok := outer.Get(baseName); ok && baseVal != nil && baseVal.Kind == ValStruct && baseVal.St != nil {
+				curr = baseVal.St.ClassDef
+				continue
+			}
+		}
+		if instance.St.Env != nil {
+			if baseVal, ok := instance.St.Env.Get(baseName); ok && baseVal != nil && baseVal.Kind == ValStruct && baseVal.St != nil {
+				curr = baseVal.St.ClassDef
+				continue
+			}
+		}
+		break
+	}
+	if initFn == nil || initFn.Body == nil {
+		return nil
+	}
+	baseEnv := instance.St.Env
+	if baseEnv == nil {
+		baseEnv = outer
+	}
+	if baseEnv == nil {
+		baseEnv = &Env{Store: make(map[string]*Value), Imported: map[string]bool{}}
+	}
+	ne := baseEnv.NewEnclosed()
+	for k, v := range instance.St.Data {
+		ptr := new(Value)
+		*ptr = v
+		ne.Set(k, ptr)
+	}
+	recvName := "this"
+	if initFn.Receiver != nil && initFn.Receiver.Name != nil && initFn.Receiver.Name.Value != "" {
+		recvName = initFn.Receiver.Name.Value
+	}
+	ne.Set(recvName, instance)
+	for i, p := range initFn.Parameters {
+		if i < len(args) {
+			ne.Set(p.Name.Value, args[i])
+		} else if p.Default != nil {
+			dv, err := evalExpression(p.Default, baseEnv)
+			if err != nil {
+				return err
+			}
+			ne.Set(p.Name.Value, dv)
+		}
+	}
+	for _, st := range initFn.Body.Statements {
+		if _, err := evalStatement(st, ne); err != nil {
+			return err
+		}
+	}
+	for k := range instance.St.Data {
+		if v, ok := ne.Get(k); ok {
+			instance.St.Data[k] = *v
+		}
+	}
+	return nil
 }
 
 // evalUserFunction invokes a user-defined function value (closure).
@@ -770,7 +1040,7 @@ func evalUserFunction(fnv *Value, args []*Value) (*Value, error) {
 	if fnv.Fn.Stmt.Body == nil {
 		return &Value{Kind: ValNull}, nil
 	}
-	for _, st := range fnv.Fn.Stmt.Body.Statements {
+	for i, st := range fnv.Fn.Stmt.Body.Statements {
 		r, err2 := evalStatement(st, ne)
 		if err2 != nil {
 			return nil, err2
@@ -778,6 +1048,13 @@ func evalUserFunction(fnv *Value, args []*Value) (*Value, error) {
 		if rw, ok2 := r.(ReturnWrap); ok2 {
 			runDefers(ne)
 			return rw.V, nil
+		}
+		// Implicit return: if this is the last statement and it's an expression result
+		if i == len(fnv.Fn.Stmt.Body.Statements)-1 {
+			if v, ok := r.(*Value); ok {
+				runDefers(ne)
+				return v, nil
+			}
 		}
 	}
 	runDefers(ne)
@@ -800,6 +1077,54 @@ func mapKeyString(v *Value) (string, error) {
 	return "", &RuntimeError{Msg: "map key must be string/int/bool"}
 }
 
+func evalCallArgs(argExprs []candy_ast.Expression, e *Env) ([]*Value, map[string]*Value, error) {
+	args := make([]*Value, 0, len(argExprs))
+	named := make(map[string]*Value)
+	for _, a := range argExprs {
+		if na, ok := a.(*candy_ast.NamedArgumentExpression); ok {
+			if na == nil || na.Name == nil {
+				return nil, nil, &RuntimeError{Msg: "invalid named argument"}
+			}
+			v, err := evalExpression(na.Value, e)
+			if err != nil {
+				return nil, nil, err
+			}
+			named[strings.ToLower(na.Name.Value)] = v
+			continue
+		}
+		av, err := evalExpression(a, e)
+		if err != nil {
+			return nil, nil, err
+		}
+		args = append(args, av)
+	}
+	return args, named, nil
+}
+
+func reorderCallArgs(fn *candy_ast.FunctionStatement, positional []*Value, named map[string]*Value) []*Value {
+	if fn == nil {
+		return positional
+	}
+	out := make([]*Value, 0, len(fn.Parameters))
+	pos := 0
+	for _, p := range fn.Parameters {
+		if p.Name == nil {
+			continue
+		}
+		if pos < len(positional) {
+			out = append(out, positional[pos])
+			pos++
+			continue
+		}
+		if v, ok := named[strings.ToLower(p.Name.Value)]; ok {
+			out = append(out, v)
+			continue
+		}
+		out = append(out, nil)
+	}
+	return out
+}
+
 func evalImport(path string, env *Env) error {
 	if env == nil {
 		return &RuntimeError{Msg: "nil env for import"}
@@ -812,7 +1137,12 @@ func evalImport(path string, env *Env) error {
 		if len(p.Errors()) > 0 {
 			var msgs []string
 			for _, d := range p.Errors() {
-				msgs = append(msgs, d.Message)
+				lineText := ""
+				lines := strings.Split(src, "\n")
+				if d.Line > 0 && d.Line <= len(lines) {
+					lineText = " -> " + strings.TrimSpace(lines[d.Line-1])
+				}
+				msgs = append(msgs, fmt.Sprintf("%d:%d: %s%s", d.Line, d.Col, d.Message, lineText))
 			}
 			return &RuntimeError{Msg: "stdlib import parse error: " + strings.Join(msgs, "; ")}
 		}
@@ -855,6 +1185,37 @@ func evalImport(path string, env *Env) error {
 	return eerr
 }
 
+func evalStructOperatorOverload(left *Value, op string, right *Value) (*Value, bool) {
+	if left == nil || left.St == nil || left.St.Def == nil {
+		return nil, false
+	}
+	for _, ov := range left.St.Def.Operators {
+		if ov == nil || ov.Operator != op || ov.Body == nil {
+			continue
+		}
+		outer := left.St.Env
+		if outer == nil {
+			outer = &Env{Store: map[string]*Value{}}
+		}
+		ne := outer.NewEnclosed()
+		ne.Set("this", left)
+		if len(ov.Parameters) > 0 && ov.Parameters[0].Name != nil {
+			ne.Set(ov.Parameters[0].Name.Value, right)
+		}
+		for _, st := range ov.Body.Statements {
+			r, err := evalStatement(st, ne)
+			if err != nil {
+				return &Value{Kind: ValNull}, true
+			}
+			if rw, ok := r.(ReturnWrap); ok {
+				return rw.V, true
+			}
+		}
+		return &Value{Kind: ValNull}, true
+	}
+	return nil, false
+}
+
 // isNullishValue is true for null coalescing: only null (and nil pointer as null).
 func isNullishValue(v *Value) bool {
 	if v == nil {
@@ -869,6 +1230,33 @@ func evalInfix(op string, l, r *Value, node candy_ast.Node) (*Value, error) {
 	}
 	if r == nil {
 		r = &Value{Kind: ValNull}
+	}
+	if l.Kind == ValVec || r.Kind == ValVec {
+		return evalVecInfix(op, l, r, node)
+	}
+	if lv, lok := vecLikeFromValue(l); lok {
+		if rv, rok := vecLikeFromValue(r); rok {
+			if len(lv) != len(rv) {
+				return nil, newError("vector operation expects equal dimensions", node)
+			}
+			switch op {
+			case "+", "-":
+				out := make([]float64, len(lv))
+				for i := range lv {
+					if op == "+" {
+						out[i] = lv[i] + rv[i]
+					} else {
+						out[i] = lv[i] - rv[i]
+					}
+				}
+				return &Value{Kind: ValVec, Vec: out}, nil
+			}
+		}
+	}
+	if l.Kind == ValStruct && l.St != nil && l.St.Def != nil {
+		if ov, ok := evalStructOperatorOverload(l, op, r); ok {
+			return ov, nil
+		}
 	}
 	switch op {
 	case "==", "!=":
@@ -914,6 +1302,16 @@ func evalInfix(op string, l, r *Value, node candy_ast.Node) (*Value, error) {
 		}
 		return nil, newError("comparison expects numeric operands", node)
 	case "+":
+		if l.Kind == ValVec && r.Kind == ValVec {
+			if len(l.Vec) != len(r.Vec) {
+				return nil, newError("vector `+` expects equal dimensions", node)
+			}
+			out := make([]float64, len(l.Vec))
+			for i := range l.Vec {
+				out[i] = l.Vec[i] + r.Vec[i]
+			}
+			return &Value{Kind: ValVec, Vec: out}, nil
+		}
 		if l.Kind == ValString || r.Kind == ValString {
 			return &Value{Kind: ValString, Str: l.String() + r.String()}, nil
 		}
@@ -934,6 +1332,16 @@ func evalInfix(op string, l, r *Value, node candy_ast.Node) (*Value, error) {
 		}
 		return &Value{Kind: ValFloat, F64: lf + rf}, nil
 	case "-", "*", "/", "%", "mod":
+		if l.Kind == ValVec && r.Kind == ValVec && op == "-" {
+			if len(l.Vec) != len(r.Vec) {
+				return nil, newError("vector `-` expects equal dimensions", node)
+			}
+			out := make([]float64, len(l.Vec))
+			for i := range l.Vec {
+				out[i] = l.Vec[i] - r.Vec[i]
+			}
+			return &Value{Kind: ValVec, Vec: out}, nil
+		}
 		if !isNumeric(l) || !isNumeric(r) {
 			return nil, newError("arithmetic expects numeric operands", node)
 		}
@@ -1022,6 +1430,43 @@ func evalInfix(op string, l, r *Value, node candy_ast.Node) (*Value, error) {
 	return nil, newError("bad infix: "+op, node)
 }
 
+func vecLikeFromValue(v *Value) ([]float64, bool) {
+	if v == nil {
+		return nil, false
+	}
+	if v.Kind == ValVec && len(v.Vec) > 0 {
+		return append([]float64(nil), v.Vec...), true
+	}
+	if v.Kind != ValMap || v.StrMap == nil {
+		return nil, false
+	}
+	get := func(name string) (float64, bool) {
+		for k, vv := range v.StrMap {
+			if strings.EqualFold(k, name) {
+				switch vv.Kind {
+				case ValFloat:
+					return vv.F64, true
+				case ValInt:
+					return float64(vv.I64), true
+				}
+			}
+		}
+		return 0, false
+	}
+	x, okX := get("x")
+	y, okY := get("y")
+	if !okX || !okY {
+		return nil, false
+	}
+	if z, okZ := get("z"); okZ {
+		if w, okW := get("w"); okW {
+			return []float64{x, y, z, w}, true
+		}
+		return []float64{x, y, z}, true
+	}
+	return []float64{x, y}, true
+}
+
 func isNumeric(v *Value) bool {
 	return v != nil && (v.Kind == ValInt || v.Kind == ValFloat)
 }
@@ -1099,6 +1544,16 @@ func valueEqual(l, r *Value) bool {
 		}
 		for i := range l.Elems {
 			if !valueEqual(&l.Elems[i], &r.Elems[i]) {
+				return false
+			}
+		}
+		return true
+	case ValVec:
+		if len(l.Vec) != len(r.Vec) {
+			return false
+		}
+		for i := range l.Vec {
+			if math.Abs(l.Vec[i]-r.Vec[i]) > 1e-9 {
 				return false
 			}
 		}

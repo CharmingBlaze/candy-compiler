@@ -12,6 +12,7 @@ For native C bindings generated from headers, see **[CANDYWRAP.md](CANDYWRAP.md)
 For the team-facing "Single-Command Integration" contract (module-folder standard, ABI guardrails, and manifest boundary), see **[CANDYWRAP_WORKFLOW.md](CANDYWRAP_WORKFLOW.md)**.
 For coding/running Candy directly inside VS Code with built-in tasks and launch profiles, see **[VSCODE.md](VSCODE.md)**.
 For language-level interop additions (`with`, bitwise flags, `array/bytes`, null/try/catch guidance), see **[C_INTEROP_ESSENTIAL_ADDITIONS.md](C_INTEROP_ESSENTIAL_ADDITIONS.md)**.
+For the shipped game-systems helper surface (vectors, physics, input, camera, controller, state/tween/entity helpers), see **[new stuff 1.2.md](new%20stuff%201.2.md)**.
 
 ---
 

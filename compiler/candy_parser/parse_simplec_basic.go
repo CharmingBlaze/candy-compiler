@@ -7,6 +7,45 @@ import (
 
 func (p *Parser) parseImportStatement() *candy_ast.ImportStatement {
 	s := &candy_ast.ImportStatement{Token: p.curToken}
+	if p.curTokenIs(candy_token.FROM) {
+		p.nextToken() // module after from
+		if !(p.curTokenIs(candy_token.STR) || p.curTokenIs(candy_token.IDENT)) {
+			p.addErrorf("expected module path after from, got %s", p.curToken.Type)
+			return nil
+		}
+		s.From = p.curToken.Literal
+		if p.peekTokenIs(candy_token.DOT) {
+			for p.peekTokenIs(candy_token.DOT) {
+				p.nextToken() // dot
+				p.nextToken() // next part
+				segment := p.curToken.Literal
+				if p.curTokenIs(candy_token.INT) && p.peekTokenIs(candy_token.IDENT) {
+					p.nextToken()
+					segment += p.curToken.Literal
+				}
+				s.From += "." + segment
+			}
+		}
+		if !p.expectPeek(candy_token.IMPORT) {
+			p.addErrorf("expected import in from-import")
+			return nil
+		}
+		if !p.expectPeek(candy_token.IDENT) {
+			p.addErrorf("expected symbol after from ... import")
+			return nil
+		}
+		s.Symbols = append(s.Symbols, p.curToken.Literal)
+		for p.peekTokenIs(candy_token.COMMA) {
+			p.nextToken()
+			if !p.expectPeek(candy_token.IDENT) {
+				return nil
+			}
+			s.Symbols = append(s.Symbols, p.curToken.Literal)
+		}
+		_ = p.expectSemicolon()
+		return s
+	}
+
 	p.nextToken() // import
 	if p.curTokenIs(candy_token.STR) {
 		s.Path = p.curToken.Literal
@@ -15,16 +54,37 @@ func (p *Parser) parseImportStatement() *candy_ast.ImportStatement {
 		s.Path = p.curToken.Literal
 		p.nextToken()
 		for p.curTokenIs(candy_token.DOT) {
-			p.nextToken()
-			if !p.expect(candy_token.IDENT) {
+			p.nextToken() // dot
+			if p.curTokenIs(candy_token.IDENT) || p.curTokenIs(candy_token.INT) {
+				segment := p.curToken.Literal
+				if p.curTokenIs(candy_token.INT) && p.peekTokenIs(candy_token.IDENT) {
+					p.nextToken()
+					segment += p.curToken.Literal
+				}
+				s.Path += "." + segment
+				p.nextToken()
+			} else {
+				p.addErrorf("expected identifier or number after . in import path, got %s", p.curToken.Type)
 				break
 			}
-			s.Path += "." + p.curToken.Literal
-			p.nextToken()
 		}
 	} else {
 		p.addErrorf("expected import path string or identifier, got %s", p.curToken.Type)
 		return nil
+	}
+	if p.curTokenIs(candy_token.AS) || p.peekTokenIs(candy_token.AS) {
+		if p.curTokenIs(candy_token.AS) {
+			if !p.expectPeek(candy_token.IDENT) {
+				return nil
+			}
+			s.Alias = p.curToken.Literal
+		} else {
+			p.nextToken()
+			if !p.expectPeek(candy_token.IDENT) {
+				return nil
+			}
+			s.Alias = p.curToken.Literal
+		}
 	}
 	_ = p.expectSemicolon()
 	return s

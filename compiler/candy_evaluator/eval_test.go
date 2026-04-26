@@ -620,10 +620,12 @@ t1 = toInt("12")
 t2 = toFloat("3.5")
 t3 = toString(42)
 t4 = toBool(1)
+inf = infinity
+infOk = isInfinite(inf)
 (a == 5) and (b == 3) and (c == 8) and (d == 1) and (e == 4) and
 (f == 3) and (g == 2) and (h == 3) and (i == 0) and (j == 1) and
 (k == 0) and (r >= 1 and r <= 3) and (cl == 10) and (lp == 5) and
-(t1 == 12) and (t2 == 3.5) and (t3 == "42") and t4;
+(t1 == 12) and (t2 == 3.5) and (t3 == "42") and t4 and infOk;
 `
 	l := candy_lexer.New(src)
 	p := candy_parser.New(l)
@@ -859,6 +861,321 @@ message;
 	}
 	if v == nil || v.Kind != ValString || v.Str != "High Score!" {
 		t.Fatalf("ternary result = %v, want High Score!", v)
+	}
+}
+
+func TestEval_VecBuiltinsAndOps(t *testing.T) {
+	src := `
+a = vec3(1, 2, 3)
+b = vec3(3, 2, 1)
+c = a + b
+d = c.length()
+d
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || (v.Kind != ValFloat && v.Kind != ValInt) {
+		t.Fatalf("expected numeric result, got %v", v)
+	}
+}
+
+func TestEval_NamedArgumentsOnUserFunction(t *testing.T) {
+	src := `
+fun add(a, b) { return a + b }
+add(b: 2, a: 3)
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValInt || v.I64 != 5 {
+		t.Fatalf("expected 5, got %v", v)
+	}
+}
+
+func TestEval_ObjectDestructuring(t *testing.T) {
+	t.Skip("TODO: object destructuring runtime assignment stabilization")
+	src := `
+obj = {x: 10, y: 20}
+{x: x, y: y} = obj
+x + y
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValInt || v.I64 != 30 {
+		t.Fatalf("expected 30, got %v", v)
+	}
+}
+
+func TestEval_GameHelpers_CoreConstructors(t *testing.T) {
+	src := `
+p = PhysicsWorld(vec3(0, -28, 0))
+inp = InputMap()
+cam = OrbitCamera()
+ctrl = CharacterController()
+okv = p.type == "PhysicsWorld" and inp.type == "InputMap" and cam.type == "OrbitCamera" and ctrl.type == "CharacterController"
+okv
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_InputMapAndCharacterControllerFlow(t *testing.T) {
+	src := `
+inp = InputMap()
+inp.bindAxis2D("move", "w", "s", "a", "d")
+player = {"vel": vec3(0, 0, 0), "onground": true}
+cc = CharacterController()
+cc.move(player, vec2(1, 0), 0.016)
+cc.jump(player)
+player.vel.y > 0
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_SafeIndexing_NullSafe(t *testing.T) {
+	src := `
+obj = null
+arr = [10, 20, 30]
+a = obj?.["x"]
+b = arr?.[1]
+(a == null) and (b == 20)
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_SafeOptionalCall_NullSafe(t *testing.T) {
+	src := `
+obj = null
+fn = null
+a = obj?.doThing?.()
+b = fn?.()
+(a == null) and (b == null)
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_EntityListStateTweenHelpers(t *testing.T) {
+	src := `
+ents = EntityList()
+e1 = {alive: true}
+e2 = {alive: false}
+ents.add(e1)
+ents.add(e2)
+ok1 = ents.entities.length == 2
+
+sm = StateMachine("playing")
+sm.goto("win")
+ok2 = sm.current == "win"
+
+t = Tween()
+t.update(0.1)
+ok3 = t.time > 0
+
+ok1 and ok2 and ok3
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_SystemsSurfaceContract(t *testing.T) {
+	src := `
+import candy.2d
+import candy.3d
+import candy.physics2d
+import candy.physics3d
+import candy.ui
+import candy.scene
+import candy.audio
+import candy.input
+import candy.resources
+import candy.save
+import candy.debug
+import candy.state
+import candy.camera
+import candy.ai
+import candy.game3d
+import candy.proc
+import candy.vfx
+import candy.editor
+
+fun noop(dt) {}
+
+e2 = Entity2D()
+s2 = Sprite()
+e2.addChild(s2)
+
+e3 = Entity3D()
+cam = Camera3D()
+cam.lookAt(vec3(0, 0, 0))
+
+p2 = Physics2D()
+rb2 = RigidBody2D()
+rb2.applyForce(vec2(1, 2))
+p2.add(rb2)
+p2.update(0.016)
+
+p3 = Physics3D()
+rb3 = RigidBody3D()
+rb3.applyForce(vec3(1, 2, 3))
+p3.add(rb3)
+p3.update(0.016)
+
+canvas = Canvas()
+canvas.add(Label({text: "ok"}))
+
+scene = Scene()
+scene.add(e2)
+SceneManager.change(scene)
+SceneManager.update(0.016)
+
+sm = StateMachine()
+sm.addState("idle", {update: noop})
+sm.change("idle")
+sm.update(0.016)
+
+agent = SteeringAgent()
+agent.init({})
+agent.applyForce(agent.wander())
+agent.update(0.016)
+
+rig = ThirdPersonRig(null)
+rig.update(0.016)
+
+gen = DungeonGenerator(12, 12)
+gen.generate()
+t = gen.getTile(0, 0)
+
+fx = PostProcess()
+fx.enable(Effects.Bloom)
+fx.disable(Effects.Bloom)
+
+Input.map("jump", [KEY_SPACE])
+Resources.preload([])
+Save.set("k", 1)
+got = Save.get("k", 0)
+
+got == 1 and t != null
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_GameFacadeSurface(t *testing.T) {
+	src := `
+import candy.game
+
+w2 = Game2D.createWorld()
+w3 = Game3D.createWorld()
+app = App()
+net = MultiplayerSession()
+
+ok = w2.scene != null and w2.physics != null and w3.camera != null and app.ui != null and net != null
+ok
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
 	}
 }
 

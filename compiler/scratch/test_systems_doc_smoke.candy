@@ -1,0 +1,99 @@
+import candy.2d
+import candy.3d
+import candy.physics2d
+import candy.physics3d
+import candy.ui
+import candy.scene
+import candy.camera
+import candy.ai
+import candy.game3d
+import candy.proc
+import candy.vfx
+import candy.editor
+import candy.input
+import candy.resources
+import candy.save
+import candy.debug
+import candy.state
+import candy.audio
+import candy.network
+
+fun main() {
+    print("systems smoke start")
+
+    var e2 = Entity2D()
+    var s2 = Sprite()
+    s2.position = vec2(5, 6)
+    e2.addChild(s2)
+    e2.update(0.016)
+
+    var e3 = Entity3D()
+    e3.translate(vec3(1, 0, 0))
+    e3.lookAt(vec3(0, 0, 1))
+
+    var p2 = Physics2D()
+    var rb2 = RigidBody2D()
+    rb2.applyForce(vec2(2, 3))
+    p2.add(rb2)
+    p2.update(0.016)
+
+    var p3 = Physics3D()
+    var rb3 = RigidBody3D()
+    rb3.applyForce(vec3(1, 2, 3))
+    rb3.applyTorque(vec3(0, 1, 0))
+    p3.add(rb3)
+    p3.update(0.016)
+
+    var cam = Camera2D()
+    cam.follow(vec2(10, 10), 0.1)
+    var wp = cam.screenToWorld(vec2(50, 50))
+    print(wp.x)
+
+    var ui = Canvas()
+    ui.add(Label({"text": "ok"}))
+
+    var scene = Scene()
+    scene.add(e2)
+    SceneManager.change(scene)
+    SceneManager.update(0.016)
+
+    var sm = StateMachine()
+    sm.addState("idle", {"update": idleUpdate})
+    sm.change("idle")
+    sm.update(0.016)
+
+    var agent = SteeringAgent()
+    agent.init({})
+    agent.applyForce(agent.wander())
+    agent.update(0.016)
+
+    var rig = ThirdPersonRig(null)
+    rig.update(0.016)
+
+    var d = DungeonGenerator(20, 20)
+    d.generate()
+    print(d.getTile(0, 0))
+
+    var fx = PostProcess()
+    fx.enable(Effects.Bloom)
+    fx.disable(Effects.Bloom)
+
+    Editor.enable()
+    Gizmos.drawLine(vec3(0, 0, 0), vec3(1, 1, 1))
+
+    Input.map("jump", [KEY_SPACE])
+    Resources.preload([])
+    Save.set("k", 1)
+    Debug.showFPS()
+    Console.log("console ok")
+    playSound("noop.wav")
+
+    var server = NetworkServer(19001, 4)
+    server.update(0)
+
+    print("systems smoke ok")
+}
+
+fun idleUpdate(dt) {}
+
+main()

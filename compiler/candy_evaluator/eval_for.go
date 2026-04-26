@@ -17,10 +17,13 @@ func evalForIn(t *candy_ast.ForStatement, e *Env) (any, error) {
 	name := t.Var.Value
 	switch it.Kind {
 	case ValArray:
-		for _, el := range it.Elems {
+		for i, el := range it.Elems {
 			ne := newIsolatedLoopEnv(e)
 			ee := el
 			ne.Set(name, ptrVal(ee))
+			if t.ValueVar != nil {
+				ne.Set(t.ValueVar.Value, &Value{Kind: ValInt, I64: int64(i)})
+			}
 			if res, err2 := runBlockInEnv(t.Body, ne); err2 != nil {
 				return nil, err2
 			} else if rw, ok2 := res.(ReturnWrap); ok2 {
@@ -33,10 +36,15 @@ func evalForIn(t *candy_ast.ForStatement, e *Env) (any, error) {
 		}
 		return nil, nil
 	case ValString:
+		idx := 0
 		for _, ru := range it.Str {
 			ne := newIsolatedLoopEnv(e)
 			c := &Value{Kind: ValString, Str: string(ru)}
 			ne.Set(name, c)
+			if t.ValueVar != nil {
+				ne.Set(t.ValueVar.Value, &Value{Kind: ValInt, I64: int64(idx)})
+			}
+			idx++
 			if res, err2 := runBlockInEnv(t.Body, ne); err2 != nil {
 				return nil, err2
 			} else if rw, ok2 := res.(ReturnWrap); ok2 {

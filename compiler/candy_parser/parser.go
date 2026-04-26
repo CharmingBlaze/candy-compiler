@@ -28,6 +28,7 @@ const (
 	CALL
 	POSTFIX
 	NULL_COALESCE
+	PIPELINE
 )
 
 var precedences = map[candy_token.TokenType]int{
@@ -72,6 +73,7 @@ var precedences = map[candy_token.TokenType]int{
 	candy_token.AND_AND:       AND,
 	candy_token.OR_OR:         OR,
 	candy_token.COMMA:         TUPLE,
+	candy_token.PIPELINE:      PIPELINE,
 }
 
 type (
@@ -130,6 +132,7 @@ func New(l *candy_lexer.Lexer) *Parser {
 	p.registerPrefix(candy_token.TYPEOF, p.parseTypeofExpression)
 	p.registerPrefix(candy_token.INC, p.parsePrefixExpression)
 	p.registerPrefix(candy_token.DEC, p.parsePrefixExpression)
+	p.registerPrefix(candy_token.SUPER, p.parseIdentifier)
 
 	p.registerInfix(candy_token.LBRACK, p.parseIndexExpression)
 	p.registerInfix(candy_token.PLUS, p.parseInfixExpression)
@@ -154,7 +157,7 @@ func New(l *candy_lexer.Lexer) *Parser {
 	p.registerInfix(candy_token.MINUS_ASSIGN, p.parseAssignExpression)
 	p.registerInfix(candy_token.STAR_ASSIGN, p.parseAssignExpression)
 	p.registerInfix(candy_token.SLASH_ASSIGN, p.parseAssignExpression)
-	p.registerInfix(candy_token.SAFE_DOT, p.parseDotExpression)
+	p.registerInfix(candy_token.SAFE_DOT, p.parseSafeAccessExpression)
 	p.registerInfix(candy_token.NULL_COALESCE, p.parseInfixExpression)
 	p.registerInfix(candy_token.RANGE, p.parseRangeExpression)
 	p.registerInfix(candy_token.RANGE_EXCL, p.parseRangeExpression)
@@ -171,6 +174,7 @@ func New(l *candy_lexer.Lexer) *Parser {
 	p.registerInfix(candy_token.COMMA, p.parseTupleInfix)
 	p.registerInfix(candy_token.INC, p.parsePostfixIncDec)
 	p.registerInfix(candy_token.DEC, p.parsePostfixIncDec)
+	p.registerInfix(candy_token.PIPELINE, p.parsePipelineExpression)
 
 	return p
 }
@@ -305,12 +309,36 @@ func (p *Parser) synchronize() {
 
 func (p *Parser) isStatementStart(tt candy_token.TokenType) bool {
 	switch tt {
-	case candy_token.VAL, candy_token.VAR, candy_token.CONST, candy_token.PRINT, candy_token.RETURN, candy_token.FUNCTION, candy_token.IF, candy_token.IMPORT, candy_token.STRUCT, candy_token.PACKAGE, candy_token.CLASS, candy_token.OBJECT, candy_token.INTERFACE, candy_token.TRAIT, candy_token.EXTERN, candy_token.SEALED, candy_token.SUSPEND,
+	case candy_token.VAL, candy_token.VAR, candy_token.CONST, candy_token.PRINT, candy_token.RETURN, candy_token.FUNCTION, candy_token.IF, candy_token.IMPORT, candy_token.FROM, candy_token.STRUCT, candy_token.PACKAGE, candy_token.CLASS, candy_token.OBJECT, candy_token.INTERFACE, candy_token.TRAIT, candy_token.EXTERN, candy_token.SEALED, candy_token.SUSPEND,
 		candy_token.DIM, candy_token.SUB, candy_token.SELECT, candy_token.FOR, candy_token.WHILE, candy_token.DO, candy_token.SWITCH, candy_token.GOTO, candy_token.IDENT, candy_token.VOID,
 		candy_token.REF, candy_token.SHARED, candy_token.MAYBE, candy_token.EXPORT, candy_token.MODULE, candy_token.ENUM, candy_token.TRY, candy_token.CATCH, candy_token.RUN, candy_token.ASYNC,
 		candy_token.LBRACK, candy_token.PRIVATE, candy_token.OPERATOR, candy_token.FINALLY,
 		candy_token.BREAK, candy_token.CONTINUE, candy_token.FOREACH, candy_token.DELETE,
 		candy_token.REPEAT, candy_token.LOOP:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *Parser) isKeyword(tt candy_token.TokenType) bool {
+	switch tt {
+	case candy_token.FUNCTION, candy_token.VAL, candy_token.VAR, candy_token.TRUE, candy_token.FALSE,
+		candy_token.IF, candy_token.ELSE, candy_token.RETURN, candy_token.IMPORT, candy_token.FROM,
+		candy_token.STRUCT, candy_token.NULL, candy_token.NEW, candy_token.WHEN, candy_token.MAP,
+		candy_token.MATCH, candy_token.IS, candy_token.CLASS, candy_token.OBJECT, candy_token.INTERFACE,
+		candy_token.TRAIT, candy_token.EXTENDS, candy_token.SEALED, candy_token.SUSPEND, candy_token.EXTERN,
+		candy_token.PACKAGE, candy_token.DIM, candy_token.THEN, candy_token.END, candy_token.SUB,
+		candy_token.AS, candy_token.FOR, candy_token.TO, candy_token.STEP, candy_token.NEXT,
+		candy_token.WHILE, candy_token.DO, candy_token.SWITCH, candy_token.DEFAULT, candy_token.WEND,
+		candy_token.SELECT, candy_token.CASE, candy_token.ELSEIF, candy_token.GOTO, candy_token.MOD,
+		candy_token.VOID, candy_token.CHAR, candy_token.OVERRIDE, candy_token.DEFER, candy_token.CONST,
+		candy_token.PRINT, candy_token.IN, candy_token.REF, candy_token.SHARED, candy_token.MODULE,
+		candy_token.EXPORT, candy_token.ENUM, candy_token.TRY, candy_token.CATCH, candy_token.FINALLY,
+		candy_token.ASYNC, candy_token.AWAIT, candy_token.RUN, candy_token.TYPEOF, candy_token.MAYBE,
+		candy_token.OPERATOR, candy_token.PRIVATE, candy_token.USING, candy_token.WITH, candy_token.EACH,
+		candy_token.AND, candy_token.OR, candy_token.NOT, candy_token.BREAK, candy_token.CONTINUE,
+		candy_token.FOREACH, candy_token.DELETE, candy_token.REPEAT, candy_token.LOOP, candy_token.SUPER:
 		return true
 	default:
 		return false

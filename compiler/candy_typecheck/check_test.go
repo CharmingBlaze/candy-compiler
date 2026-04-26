@@ -220,3 +220,33 @@ extern fun native_add(x: Int, y: Int): Int { };
 		t.Fatalf("expected no issues, got %v", issues)
 	}
 }
+
+func TestGameHelperBuiltinsTypecheck(t *testing.T) {
+	src := `
+pw = PhysicsWorld(vec3(0, -28, 0))
+imap = InputMap()
+imap.bind("jump", "space")
+imap.bindAxis2D("move", "w", "s", "a", "d")
+cam = OrbitCamera()
+cc = CharacterController()
+ents = EntityList()
+hud = HUD()
+ui = UILayout()
+sm = StateMachine("playing")
+tw = Tween()
+tf = Transform()
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+	issues := CheckProgram(prog)
+	// This is a shallow checker; helper-builtins should not create hard unknown-identifier issues.
+	for _, is := range issues {
+		if strings.Contains(strings.ToLower(is.Message), "unknown identifier") {
+			t.Fatalf("unexpected unknown identifier issue: %v", is.Message)
+		}
+	}
+}

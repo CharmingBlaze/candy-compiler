@@ -52,6 +52,13 @@ func (l *Lexer) peekChar() byte {
 	return l.input[l.readPosition]
 }
 
+func (l *Lexer) peek2Char() byte {
+	if l.readPosition+1 >= len(l.input) {
+		return 0
+	}
+	return l.input[l.readPosition+1]
+}
+
 // NextToken returns the next token.
 func (l *Lexer) NextToken() candy_token.Token {
 	l.skipSpaceAndComments()
@@ -151,7 +158,11 @@ func (l *Lexer) NextToken() candy_token.Token {
 		if l.peekChar() == '.' {
 			tok = l.tok2(candy_token.SAFE_DOT, tLine, tCol, tOff)
 		} else if l.peekChar() == '?' {
-			tok = l.tok2(candy_token.NULL_COALESCE, tLine, tCol, tOff)
+			if l.peek2Char() == '=' {
+				tok = l.tok3(candy_token.NULL_COALESCE_ASSIGN, tLine, tCol, tOff)
+			} else {
+				tok = l.tok2(candy_token.NULL_COALESCE, tLine, tCol, tOff)
+			}
 		} else {
 			tok = l.tok1(candy_token.QUESTION, tLine, tCol, tOff)
 		}
@@ -163,9 +174,25 @@ func (l *Lexer) NextToken() candy_token.Token {
 		}
 	case '|':
 		if l.peekChar() == '|' {
-			tok = l.tok2(candy_token.OR_OR, tLine, tCol, tOff)
+			if l.peek2Char() == '=' {
+				tok = l.tok3(candy_token.OR_ASSIGN, tLine, tCol, tOff)
+			} else {
+				tok = l.tok2(candy_token.OR_OR, tLine, tCol, tOff)
+			}
+		} else if l.peekChar() == '>' {
+			tok = l.tok2(candy_token.PIPELINE, tLine, tCol, tOff)
 		} else {
 			tok = l.tok1(candy_token.BIT_OR, tLine, tCol, tOff)
+		}
+	case '`':
+		if l.peekChar() == '`' {
+			if l.readPosition+1 < len(l.input) && l.input[l.readPosition+1] == '`' {
+				tok = l.readTripleBacktickString(tLine, tCol, tOff)
+			} else {
+				tok = l.tok1(candy_token.ILLEGAL, tLine, tCol, tOff)
+			}
+		} else {
+			tok = l.tok1(candy_token.ILLEGAL, tLine, tCol, tOff)
 		}
 	case '^':
 		tok = l.tok1(candy_token.BIT_XOR, tLine, tCol, tOff)
@@ -198,10 +225,10 @@ func (l *Lexer) NextToken() candy_token.Token {
 		}
 	default:
 		if isLetter(l.ch) {
-			id := l.readIdentifier()
-			norm := strings.ToLower(id)
-			ty := candy_token.LookupIdent(norm)
-			tok = candy_token.Token{Type: ty, Literal: norm, Line: tLine, Col: tCol, Offset: tOff}
+			raw := l.readIdentifier()
+			id := strings.ToLower(raw)
+			ty := candy_token.LookupIdent(id)
+			tok = candy_token.Token{Type: ty, Literal: id, Line: tLine, Col: tCol, Offset: tOff}
 		} else if isDigit(l.ch) {
 			tok = l.readNumber(tLine, tCol, tOff)
 		} else {
@@ -381,6 +408,28 @@ func (l *Lexer) readIdentifier() string {
 		l.readChar()
 	}
 	return l.input[s:l.position]
+}
+
+func (l *Lexer) readTripleBacktickString(line, col, off int) candy_token.Token {
+	l.readChar() // `
+	l.readChar() // `
+	l.readChar() // `
+	start := l.position
+	for {
+		if l.ch == 0 {
+			return candy_token.Token{Type: candy_token.ILLEGAL, Literal: "unclosed triple-backtick string", Line: line, Col: col, Offset: off}
+		}
+		if l.ch == '`' && l.peekChar() == '`' {
+			if l.readPosition+1 < len(l.input) && l.input[l.readPosition+1] == '`' {
+				lit := l.input[start:l.position]
+				l.readChar() // `
+				l.readChar() // `
+				l.readChar() // `
+				return candy_token.Token{Type: candy_token.STR, Literal: lit, Line: line, Col: col, Offset: off}
+			}
+		}
+		l.readChar()
+	}
 }
 
 func isLetter(ch byte) bool {

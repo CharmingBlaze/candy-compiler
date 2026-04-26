@@ -5,7 +5,7 @@ import "candy/candy_token"
 type IfExpression struct {
 	Token       candy_token.Token
 	Condition   Expression
-	Consequence *BlockStatement
+	Consequence Statement
 	Alternative Statement
 }
 

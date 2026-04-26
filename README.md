@@ -78,6 +78,7 @@ This builds `candy`, `candywrap`, and `sweet` into `release/bin`.
 - [Language Guide](docs/LANGUAGE.md)
 - [Standard Library](docs/STDLIB.md)
 - [Extensions (graphics/input/audio/3D)](docs/EXTENSIONS.md)
+- [Game Systems 1.2 (implemented)](docs/new%20stuff%201.2.md)
 - [Candywrap / Sweet](docs/CANDYWRAP.md)
 - [Candywrap Workflow Contract](docs/CANDYWRAP_WORKFLOW.md)
 - [VS Code Workflow](docs/VSCODE.md)

@@ -287,10 +287,20 @@ func mouseButtonCode(n int64) rl.MouseButton {
 }
 
 func argVector2(name string, args []*candy_evaluator.Value, i int) (rl.Vector2, error) {
-	if i >= len(args) || args[i] == nil || args[i].Kind != candy_evaluator.ValMap {
-		return rl.Vector2{}, fmt.Errorf("%s arg %d must be map {x, y}", name, i+1)
+	if i >= len(args) || args[i] == nil {
+		return rl.Vector2{}, fmt.Errorf("%s arg %d is nil", name, i+1)
 	}
-	m := args[i].StrMap
+	v := args[i]
+	if v.Kind == candy_evaluator.ValVec {
+		if len(v.Vec) < 2 {
+			return rl.Vector2{}, fmt.Errorf("%s arg %d vector must have at least 2 elements, got %d", name, i+1, len(v.Vec))
+		}
+		return rl.NewVector2(float32(v.Vec[0]), float32(v.Vec[1])), nil
+	}
+	if v.Kind != candy_evaluator.ValMap {
+		return rl.Vector2{}, fmt.Errorf("%s arg %d must be map {x, y} or vec2", name, i+1)
+	}
+	m := v.StrMap
 	x := 0.0
 	if v, ok := m["x"]; ok && (v.Kind == candy_evaluator.ValFloat || v.Kind == candy_evaluator.ValInt) {
 		if v.Kind == candy_evaluator.ValInt {
@@ -311,30 +321,40 @@ func argVector2(name string, args []*candy_evaluator.Value, i int) (rl.Vector2, 
 }
 
 func argVector3(name string, args []*candy_evaluator.Value, i int) (rl.Vector3, error) {
-	if i >= len(args) || args[i] == nil || args[i].Kind != candy_evaluator.ValMap {
-		return rl.Vector3{}, fmt.Errorf("%s arg %d must be map {x, y, z}", name, i+1)
+	if i >= len(args) || args[i] == nil {
+		return rl.Vector3{}, fmt.Errorf("%s arg %d is nil", name, i+1)
 	}
-	m := args[i].StrMap
+	v := args[i]
+	if v.Kind == candy_evaluator.ValVec {
+		if len(v.Vec) < 3 {
+			return rl.Vector3{}, fmt.Errorf("%s arg %d vector must have at least 3 elements, got %d", name, i+1, len(v.Vec))
+		}
+		return rl.NewVector3(float32(v.Vec[0]), float32(v.Vec[1]), float32(v.Vec[2])), nil
+	}
+	if v.Kind != candy_evaluator.ValMap {
+		return rl.Vector3{}, fmt.Errorf("%s arg %d must be map {x, y, z} or vec3", name, i+1)
+	}
+	m := v.StrMap
 	var x, y, z float64
-	if v, ok := m["x"]; ok {
-		if v.Kind == candy_evaluator.ValInt {
-			x = float64(v.I64)
+	if vv, ok := m["x"]; ok {
+		if vv.Kind == candy_evaluator.ValInt {
+			x = float64(vv.I64)
 		} else {
-			x = v.F64
+			x = vv.F64
 		}
 	}
-	if v, ok := m["y"]; ok {
-		if v.Kind == candy_evaluator.ValInt {
-			y = float64(v.I64)
+	if vv, ok := m["y"]; ok {
+		if vv.Kind == candy_evaluator.ValInt {
+			y = float64(vv.I64)
 		} else {
-			y = v.F64
+			y = vv.F64
 		}
 	}
-	if v, ok := m["z"]; ok {
-		if v.Kind == candy_evaluator.ValInt {
-			z = float64(v.I64)
+	if vv, ok := m["z"]; ok {
+		if vv.Kind == candy_evaluator.ValInt {
+			z = float64(vv.I64)
 		} else {
-			z = v.F64
+			z = vv.F64
 		}
 	}
 	return rl.NewVector3(float32(x), float32(y), float32(z)), nil

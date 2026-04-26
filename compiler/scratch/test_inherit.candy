@@ -1,0 +1,5 @@
+class Base {
+    fun hello() { print("base hello"); }
+}
+object Derived extends Base {}
+Derived.hello()

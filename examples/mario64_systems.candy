@@ -1,0 +1,91 @@
+// Candy Mario 64 - High Level Systems Demo
+import candy.3d
+import candy.physics3d
+import candy.input
+import candy.scene
+import candy.audio
+
+// 1. Define Player Object
+object Player extends CharacterController3D {
+    var model = Model("assets/mario.obj")
+    var anim = Animation3D("assets/mario.iqm")
+    var voice = AudioSource()
+    
+    fun init() {
+        position = vec3(0, 10, 0)
+        model.scale = vec3(0.5, 0.5, 0.5)
+        Input.map("jump", [KEY_SPACE, GAMEPAD_BUTTON_A])
+        Input.map("move", [KEY_W, KEY_S, KEY_A, KEY_D])
+    }
+    
+    fun update(dt) {
+        var moveDir = Input.get2DAxis("move")
+        move(vec3(moveDir.x, 0, moveDir.y), 10.0, dt)
+        
+        if Input.isPressed("jump") and onGround {
+            jump()
+            voice.play("assets/wahoo.wav")
+            anim.play("jump")
+        } else if moveDir.length() > 0.1 {
+            anim.play("run")
+        } else {
+            anim.play("idle")
+        }
+        
+        anim.update(dt)
+    }
+    
+    fun draw() {
+        model.position = position
+        model.draw()
+    }
+}
+
+// 2. Define Level/Scene
+object CastleScene extends Scene {
+    var castle = Model("assets/castle.obj")
+    var sky = Model("assets/sky.obj")
+    var music = AudioSource()
+    var cam = Camera3D()
+    
+    fun init() {
+        add(Player)
+        music.play("assets/castle_theme.mp3", true)
+        cam.position = vec3(0, 5, 10)
+    }
+    
+    fun update(dt) {
+        super.update(dt)
+        cam.target = Player.position
+        cam.position = Player.position + vec3(0, 5, 10)
+    }
+    
+    fun draw() {
+        beginMode3D(cam)
+        sky.draw()
+        castle.draw()
+        super.draw()
+        endMode3D()
+    }
+}
+
+// 3. Main Entry
+fun main() {
+    window(1280, 720, "Candy Mario 64")
+    SceneManager.change(CastleScene)
+    
+    while !shouldClose() {
+        var dt = getFrameTime()
+        SceneManager.update(dt)
+        
+        beginDrawing()
+        clear("skyblue")
+        SceneManager.draw()
+        drawFPS(10, 10)
+        endDrawing()
+    }
+    
+    closeWindow()
+}
+
+main()

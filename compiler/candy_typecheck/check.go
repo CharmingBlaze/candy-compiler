@@ -73,6 +73,28 @@ func CheckProgram(p *candy_ast.Program) []candy_report.Diagnostic {
 	c.bind("err", "builtin")
 	c.bind("clock", "builtin")
 	c.bind("exit", "builtin")
+	c.bind("vec2", "builtin")
+	c.bind("vec3", "builtin")
+	c.bind("vec4", "builtin")
+	c.bind("format", "builtin")
+	c.bind("enumerate", "builtin")
+	c.bind("box", "builtin")
+	c.bind("aabb", "builtin")
+	c.bind("sphere", "builtin")
+	c.bind("ray", "builtin")
+	c.bind("physicsworld", "builtin")
+	c.bind("inputmap", "builtin")
+	c.bind("orbitcamera", "builtin")
+	c.bind("firstpersoncamera", "builtin")
+	c.bind("charactercontroller", "builtin")
+	c.bind("entitylist", "builtin")
+	c.bind("uilayout", "builtin")
+	c.bind("hud", "builtin")
+	c.bind("statemachine", "builtin")
+	c.bind("tween", "builtin")
+	c.bind("transform", "builtin")
+	c.bind("drawall", "builtin")
+	c.bind("gameloop", "builtin")
 
 	// Pass 2: Typecheck statements
 	for _, s := range p.Statements {
@@ -266,7 +288,7 @@ func returnsNullLiteral(b *candy_ast.BlockStatement) bool {
 				return true
 			}
 		case *candy_ast.IfExpression:
-			if returnsNullLiteral(t.Consequence) || statementReturnsNullLiteral(t.Alternative) {
+			if statementReturnsNullLiteral(t.Consequence) || statementReturnsNullLiteral(t.Alternative) {
 				return true
 			}
 		}
@@ -282,7 +304,7 @@ func statementReturnsNullLiteral(s candy_ast.Statement) bool {
 		return returnsNullLiteral(b)
 	}
 	if ie, ok := s.(*candy_ast.IfExpression); ok {
-		if returnsNullLiteral(ie.Consequence) || statementReturnsNullLiteral(ie.Alternative) {
+		if statementReturnsNullLiteral(ie.Consequence) || statementReturnsNullLiteral(ie.Alternative) {
 			return true
 		}
 	}
@@ -507,6 +529,9 @@ func (c *Checker) expr(n candy_ast.Expression) {
 	case *candy_ast.DotExpression:
 		c.expr(t.Left)
 		lType := c.inferExprType(t.Left)
+		if strings.HasPrefix(lType, "vec") {
+			return
+		}
 		if lType != "any" && lType != "builtin" {
 			if _, found := c.findMember(lType, t.Right.Value); !found {
 				c.add(fmt.Sprintf("type %s has no field or property %s", lType, t.Right.Value), t)
@@ -581,6 +606,12 @@ func (c *Checker) inferExprType(e candy_ast.Expression) string {
 		if ty, found := c.findOperator(l, t.Operator); found {
 			return ty
 		}
+		if strings.HasPrefix(l, "vec") || strings.HasPrefix(r, "vec") {
+			if strings.HasPrefix(l, "vec") {
+				return l
+			}
+			return r
+		}
 		if t.Operator == "+" && l == "string" && r == "string" {
 			return "string"
 		}
@@ -596,6 +627,19 @@ func (c *Checker) inferExprType(e candy_ast.Expression) string {
 		return canonType(candy_ast.ExprAsSimpleTypeName(t.Name))
 	case *candy_ast.DotExpression:
 		leftType := c.inferExprType(t.Left)
+		if strings.HasPrefix(leftType, "vec") {
+			switch strings.ToLower(t.Right.Value) {
+			case "x", "y", "z", "w", "length", "dot", "cross", "normalize", "distance":
+				if t.Right.Value == "normalize" {
+					return leftType
+				}
+				return "float"
+			case "xy":
+				return "vec2"
+			case "xz", "yz":
+				return "vec2"
+			}
+		}
 		if ty, found := c.findMember(leftType, t.Right.Value); found {
 			return ty
 		}
@@ -619,6 +663,18 @@ func (c *Checker) inferExprType(e candy_ast.Expression) string {
 	case *candy_ast.TypeExpression:
 		return c.resolveTypeExpression(t)
 	default:
+		if ce, ok := e.(*candy_ast.CallExpression); ok {
+			if id, ok2 := ce.Function.(*candy_ast.Identifier); ok2 {
+				switch strings.ToLower(id.Value) {
+				case "vec2":
+					return "vec2"
+				case "vec3":
+					return "vec3"
+				case "vec4":
+					return "vec4"
+				}
+			}
+		}
 		return "any"
 	}
 }
@@ -740,9 +796,7 @@ func (c *Checker) walkIfExpression(t *candy_ast.IfExpression) {
 			c.pushScope()
 			c.bind(narrowedVar, narrowedTo)
 		}
-		for _, x := range t.Consequence.Statements {
-			c.stmt(x)
-		}
+		c.stmt(t.Consequence)
 		if narrowedVar != "" {
 			c.popScope()
 		}

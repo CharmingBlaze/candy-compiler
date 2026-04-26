@@ -1,0 +1,4 @@
+var x = 100
+print("x is {x}")
+var y = { val: 200 }
+print("y.val is {y.val}")

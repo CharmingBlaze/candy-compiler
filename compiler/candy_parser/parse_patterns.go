@@ -69,19 +69,30 @@ func (p *Parser) parseMatchExpression() candy_ast.Expression {
 			continue
 		}
 		pat := p.parseExpression(LOWEST)
-		if p.peekTokenIs(candy_token.RBRACE) {
-			break
-		}
-		if !p.expectPeek(candy_token.COLON) {
-			break
-		}
-		p.nextToken()
-		bod := p.parseExpression(LOWEST)
-		m.Branches = append(m.Branches, candy_ast.MatchBranch{Pat: pat, Body: bod})
-		if p.peekTokenIs(candy_token.SEMICOLON) {
+
+		var guard candy_ast.Expression
+		if p.curTokenIs(candy_token.IF) {
 			p.nextToken()
-		} else {
-			break
+			guard = p.parseExpression(LOWEST)
+		} else if p.peekTokenIs(candy_token.IF) {
+			p.nextToken() // IF
+			p.nextToken() // start of expr
+			guard = p.parseExpression(LOWEST)
+		}
+
+		if p.peekTokenIs(candy_token.ARROW) || p.peekTokenIs(candy_token.COLON) {
+			p.nextToken()
+			p.nextToken()
+		}
+
+		bod := p.parseExpression(LOWEST)
+		m.Branches = append(m.Branches, candy_ast.MatchBranch{Pat: pat, Guard: guard, Body: bod})
+
+		if p.peekTokenIs(candy_token.SEMICOLON) || p.peekTokenIs(candy_token.COMMA) {
+			p.nextToken()
+			p.nextToken()
+		} else if p.curTokenIs(candy_token.SEMICOLON) || p.curTokenIs(candy_token.COMMA) {
+			p.nextToken()
 		}
 	}
 	_ = p.expect(candy_token.RBRACE)

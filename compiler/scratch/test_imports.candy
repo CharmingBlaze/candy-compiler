@@ -1,0 +1,12 @@
+import candy.math
+print("math ok")
+import candy.2d
+print("2d ok")
+import candy.3d
+print("3d ok")
+import candy.physics3d
+print("physics3d ok")
+import candy.input
+print("input ok")
+import candy.scene
+print("scene ok")

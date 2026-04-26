@@ -2,8 +2,13 @@ package candy_evaluator
 
 import (
 	"candy/candy_enet"
+	"candy/candy_stdlib"
 	"fmt"
 )
+
+func init() {
+	candy_stdlib.Modules["enet"] = "// Host module: enet"
+}
 
 var enetRuntime = candy_enet.NewRuntime()
 

@@ -105,10 +105,12 @@ func writeStatement(b *strings.Builder, s candy_ast.Statement, ind int) {
 		b.WriteString("if (")
 		b.WriteString(candy_ast.StringExpr(t.Condition))
 		b.WriteString(") {\n")
-		if t.Consequence != nil {
-			for _, bs := range t.Consequence.Statements {
+		if consBlock, ok := t.Consequence.(*candy_ast.BlockStatement); ok && consBlock != nil {
+			for _, bs := range consBlock.Statements {
 				writeStatement(b, bs, ind+1)
 			}
+		} else if t.Consequence != nil {
+			writeStatement(b, t.Consequence, ind+1)
 		}
 		writeIndent(b, ind)
 		b.WriteString("}")

@@ -1,0 +1,239 @@
+import candy.3d
+import candy.physics3d
+import candy.input
+
+object Player extends CharacterController3D {
+    var color = "red"
+    var size = vec3(1.0, 2.0, 1.0)
+    var prevX = 0.0
+    var prevY = 1.0
+    var prevZ = 0.0
+
+    fun init() {
+        position = vec3(0, 1.0, 0)
+        gravity = 28.0
+        jumpPower = 9.0
+        Input.map("jump", [KEY_SPACE, GAMEPAD_BUTTON_A])
+        Input.map("move", [KEY_W, KEY_S, KEY_A, KEY_D])
+        prevX = position.x
+        prevY = position.y
+        prevZ = position.z
+    }
+
+    fun resolveBlock(cx, cy, cz, w, h, d) {
+        var halfW = size.x * 0.5
+        var halfH = size.y * 0.5
+        var halfD = size.z * 0.5
+        var blockHalfW = w * 0.5
+        var blockHalfH = h * 0.5
+        var blockHalfD = d * 0.5
+
+        var dx = position.x - cx
+        var dy = position.y - cy
+        var dz = position.z - cz
+        var adx = dx
+        var ady = dy
+        var adz = dz
+        if adx < 0 { adx = -adx; }
+        if ady < 0 { ady = -ady; }
+        if adz < 0 { adz = -adz; }
+
+        var overlapX = (halfW + blockHalfW) - adx
+        var overlapY = (halfH + blockHalfH) - ady
+        var overlapZ = (halfD + blockHalfD) - adz
+
+        if overlapX <= 0 or overlapY <= 0 or overlapZ <= 0 {
+            return
+        }
+
+        // Resolve along the minimum penetration axis.
+        if overlapY <= overlapX and overlapY <= overlapZ {
+            if dy >= 0 {
+                position.y = cy + blockHalfH + halfH
+                if velocity.y < 0 { velocity.y = 0; }
+                onGround = true
+            } else {
+                position.y = cy - blockHalfH - halfH
+                if velocity.y > 0 { velocity.y = 0; }
+            }
+            return
+        }
+
+        if overlapX <= overlapZ {
+            if dx >= 0 {
+                position.x = position.x + overlapX
+            } else {
+                position.x = position.x - overlapX
+            }
+            velocity.x = 0
+            return
+        }
+
+        if dz >= 0 {
+            position.z = position.z + overlapZ
+        } else {
+            position.z = position.z - overlapZ
+        }
+        velocity.z = 0
+    }
+
+    fun resolveCollision() {
+        var halfH = size.y * 0.5
+        onGround = false
+
+        // Ground plane.
+        if position.y - halfH <= 0 {
+            position.y = halfH
+            if velocity.y < 0 { velocity.y = 0; }
+            onGround = true
+        }
+
+        // Static platforms (same values used in drawWorld()).
+        resolveBlock(4.0, 0.5, 0.0, 2.0, 1.0, 2.0)
+        resolveBlock(7.0, 1.5, 0.0, 2.0, 1.0, 2.0)
+        resolveBlock(10.0, 2.5, 0.0, 2.0, 1.0, 2.0)
+        resolveBlock(-6.0, 1.0, -4.0, 3.0, 1.0, 3.0)
+    }
+
+    fun update(dt) {
+        prevX = position.x
+        prevY = position.y
+        prevZ = position.z
+        var moveDir = Input.get2DAxis("move")
+        move(vec3(moveDir.x, 0, moveDir.y), 10.0, dt)
+        resolveCollision()
+        if Input.isPressed("jump") and onGround {
+            jump()
+        }
+    }
+
+    fun draw() {
+        drawCube(position.x, position.y, position.z, size.x, size.y, size.z, color)
+    }
+}
+
+object OrbitRig extends OrbitCamera {
+    var minDistance = 4.0
+    var maxDistance = 22.0
+    var sensitivity = 0.0035
+    var desiredYaw = 0.5
+    var desiredPitch = 0.4
+    var smoothTarget = vec3(0, 1.0, 0)
+    var targetHeight = 1.0
+    var orbitSmooth = 16.0
+    var followSmooth = 10.0
+    var positionSmooth = 14.0
+    var mouseDeadzone = 0.15
+
+    fun init() {
+        this.target = Player.position
+        this.distance = 10.0
+        this.yaw = 0.5
+        this.pitch = 0.4
+        this.desiredYaw = this.yaw
+        this.desiredPitch = this.pitch
+        this.smoothTarget = vec3(Player.position.x, Player.position.y + this.targetHeight, Player.position.z)
+    }
+
+    fun update(dt) {
+        // Clamp dt spikes to avoid camera jumps after stalls.
+        if dt > 0.05 { dt = 0.05; }
+
+        // Mouse movement orbits camera around player with deadzone to remove jitter.
+        var d = getMouseDelta()
+        var mx = d.x
+        var my = d.y
+        var ax = mx
+        var ay = my
+        if ax < 0 { ax = -ax; }
+        if ay < 0 { ay = -ay; }
+        if ax < this.mouseDeadzone { mx = 0; }
+        if ay < this.mouseDeadzone { my = 0; }
+
+        this.desiredYaw -= mx * this.sensitivity
+        this.desiredPitch += my * this.sensitivity
+
+        if this.desiredPitch > 1.2 { this.desiredPitch = 1.2; }
+        if this.desiredPitch < -1.0 { this.desiredPitch = -1.0; }
+
+        // Mouse wheel zoom (works on most trackpads too).
+        var wheel = getMouseWheelMove()
+        if wheel != 0 {
+            this.distance -= wheel * 1.2
+        }
+        if this.distance < this.minDistance { this.distance = this.minDistance; }
+        if this.distance > this.maxDistance { this.distance = this.maxDistance; }
+
+        // Smooth rotation and target follow (professional third-person camera feel).
+        var rotLerp = this.orbitSmooth * dt
+        if rotLerp > 1 { rotLerp = 1; }
+        this.yaw = this.yaw + (this.desiredYaw - this.yaw) * rotLerp
+        this.pitch = this.pitch + (this.desiredPitch - this.pitch) * rotLerp
+
+        var wantedTarget = vec3(Player.position.x, Player.position.y + this.targetHeight, Player.position.z)
+        var followLerp = this.followSmooth * dt
+        if followLerp > 1 { followLerp = 1; }
+        this.smoothTarget.x = this.smoothTarget.x + (wantedTarget.x - this.smoothTarget.x) * followLerp
+        this.smoothTarget.y = this.smoothTarget.y + (wantedTarget.y - this.smoothTarget.y) * followLerp
+        this.smoothTarget.z = this.smoothTarget.z + (wantedTarget.z - this.smoothTarget.z) * followLerp
+        this.target = this.smoothTarget
+
+        var cp = math.cos(this.pitch)
+        var wantedPos = vec3(
+            this.target.x + math.sin(this.yaw) * cp * this.distance,
+            this.target.y + math.sin(this.pitch) * this.distance + 1.0,
+            this.target.z + math.cos(this.yaw) * cp * this.distance
+        )
+        var posLerp = this.positionSmooth * dt
+        if posLerp > 1 { posLerp = 1; }
+        this.position.x = this.position.x + (wantedPos.x - this.position.x) * posLerp
+        this.position.y = this.position.y + (wantedPos.y - this.position.y) * posLerp
+        this.position.z = this.position.z + (wantedPos.z - this.position.z) * posLerp
+    }
+}
+
+fun drawWorld() {
+    // Ground
+    drawCube(0, -0.5, 0, 40, 1, 40, "green")
+
+    // A few blocks/platforms to jump around.
+    drawCube(4, 0.5, 0, 2, 1, 2, "blue")
+    drawCube(7, 1.5, 0, 2, 1, 2, "purple")
+    drawCube(10, 2.5, 0, 2, 1, 2, "orange")
+    drawCube(-6, 1.0, -4, 3, 1, 3, "brown")
+}
+
+fun drawHUD() {
+    drawText(12, 10, "Candy Mario64 Orbit Demo", 24, "white")
+    drawText(12, 40, "WASD move | SPACE jump | Move mouse orbit | Wheel zoom", 18, "yellow")
+    drawText(12, 64, "Player: ({Player.position.x}, {Player.position.y}, {Player.position.z})", 18, "skyblue")
+}
+
+fun main() {
+    window(1280, 720, "Candy Mario64 Orbit Playable")
+    setTargetFPS(60)
+
+    while !shouldClose() {
+        var dt = getFrameTime()
+
+        Player.update(dt)
+        OrbitRig.update(dt)
+
+        beginDrawing()
+        clear("black")
+
+        beginMode3D(OrbitRig)
+        drawWorld()
+        Player.draw()
+        drawGrid(20, 1.0)
+        endMode3D()
+
+        drawHUD()
+        drawFPS(1180, 10)
+        endDrawing()
+    }
+
+    closeWindow()
+}
+
+main()

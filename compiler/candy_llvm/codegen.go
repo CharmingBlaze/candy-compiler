@@ -221,8 +221,13 @@ func (c *Compiler) compileStatement(stmt candy_ast.Statement) {
 			return
 		}
 		if t.ReturnValue == nil {
-			c.addErr(fmt.Errorf("codegen: empty return in non-void function"))
-			c.emit("ret %s 0", c.curRet)
+			retTy := c.curRet
+			if retTy == "" {
+				retTy = "i64"
+			} else {
+				c.addErr(fmt.Errorf("codegen: empty return in non-void function"))
+			}
+			c.emit("ret %s 0", retTy)
 			return
 		}
 		val := c.compileExpression(t.ReturnValue)
@@ -642,7 +647,11 @@ func (c *Compiler) compileIf(t *candy_ast.IfExpression) {
 		c.pushNarrowing(map[string]string{ident: narrowedType})
 		defer c.popNarrowing()
 	}
-	c.compileBlock(t.Consequence)
+	if consBlock, ok := t.Consequence.(*candy_ast.BlockStatement); ok && consBlock != nil {
+		c.compileBlock(consBlock)
+	} else if t.Consequence != nil {
+		c.compileStatement(t.Consequence)
+	}
 	c.emit("br label %%%s", mergeLabel)
 
 	// Else branch

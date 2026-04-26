@@ -11,6 +11,7 @@ type CallExpression struct {
 	Function      Expression
 	TypeArguments []Expression
 	Arguments     []Expression
+	IsSafe        bool
 }
 
 func (ce *CallExpression) expressionNode()      {}

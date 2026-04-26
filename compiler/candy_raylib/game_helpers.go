@@ -148,7 +148,17 @@ var (
 
 	cooldowns = map[string]float64{}
 	saveData  = map[string]candy_evaluator.Value{}
+
+	floatingTexts = []*helperFloatingText{}
+	wanderTarget  = map[*candy_evaluator.Value]float64{}
 )
+
+type helperFloatingText struct {
+	text  string
+	x, y  float64
+	life  float64
+	color rl.Color
+}
 
 func registerGameHelperBuiltins() {
 	// camera helpers
@@ -1027,6 +1037,20 @@ func helperTick(dt float64) {
 	if dt <= 0 {
 		dt = float64(rl.GetFrameTime())
 	}
+
+	// Update and draw floating texts
+	aliveFTs := []*helperFloatingText{}
+	for _, ft := range floatingTexts {
+		ft.y -= 40 * dt
+		ft.life -= dt
+		if ft.life > 0 {
+			aliveFTs = append(aliveFTs, ft)
+			alpha := float32(ft.life / 1.5)
+			rl.DrawText(ft.text, int32(ft.x), int32(ft.y), 20, rl.Fade(ft.color, alpha))
+		}
+	}
+	floatingTexts = aliveFTs
+
 	for _, t := range tasks {
 		if t.done {
 			continue
@@ -1856,7 +1880,33 @@ func builtinDrawProjectiles(args []*candy_evaluator.Value) (*candy_evaluator.Val
 	}
 	return null(), nil
 }
-func builtinProjectileHit(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return vBool(false), nil }
+func builtinProjectileHit(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 2 {
+		return vBool(false), nil
+	}
+	id, _ := argInt("projectileHit", args, 0)
+	ent := args[1]
+	p, ok := projectiles[id]
+	if !ok {
+		return vBool(false), nil
+	}
+
+	px, py := getMapNum(p, "x"), getMapNum(p, "y")
+	ex, ey := getMapNum(ent, "x"), getMapNum(ent, "y")
+	ew, eh := getMapNum(ent, "w"), getMapNum(ent, "h")
+	if ew == 0 {
+		ew = 20
+	}
+	if eh == 0 {
+		eh = 20
+	}
+
+	hit := rl.CheckCollisionPointRec(rl.NewVector2(float32(px), float32(py)), rl.NewRectangle(float32(ex-ew*0.5), float32(ey-eh*0.5), float32(ew), float32(eh)))
+	if hit {
+		delete(projectiles, id)
+	}
+	return vBool(hit), nil
+}
 func builtinHitscan(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)       { return null(), nil }
 func builtinLockOnNearest(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return null(), nil }
 func builtinDamage(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
@@ -1961,12 +2011,122 @@ func builtinStateSet(args []*candy_evaluator.Value) (*candy_evaluator.Value, err
 	return null(), nil
 }
 func builtinStateUpdate(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return null(), nil }
-func builtinPatrol(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)     { return vInt(1), nil }
-func builtinChase(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)      { return vInt(1), nil }
-func builtinFlee(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)       { return vInt(1), nil }
-func builtinWander(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)     { return vInt(1), nil }
-func builtinLineOfSight(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return vBool(true), nil }
-func builtinCanSee(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)      { return vBool(true), nil }
+func builtinPatrol(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 4 {
+		return nil, fmt.Errorf("patrol expects entity, minX, maxX, speed")
+	}
+	ent := args[0]
+	minX := numOr0(args[1])
+	maxX := numOr0(args[2])
+	speed := numOr0(args[3])
+	dt := float64(rl.GetFrameTime())
+	if dt <= 0 {
+		dt = 1.0 / 60.0
+	}
+
+	x := getMapNum(ent, "x")
+	vx := getMapNum(ent, "vx")
+	if vx == 0 {
+		vx = speed
+	}
+
+	x += vx * dt
+	if x < minX {
+		x = minX
+		vx = math.Abs(vx)
+	} else if x > maxX {
+		x = maxX
+		vx = -math.Abs(vx)
+	}
+	setMapNum(ent, "x", x)
+	setMapNum(ent, "vx", vx)
+	return null(), nil
+}
+
+func builtinChase(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 4 {
+		return nil, fmt.Errorf("chase expects entity, targetX, targetY, speed")
+	}
+	ent := args[0]
+	tx := numOr0(args[1])
+	ty := numOr0(args[2])
+	speed := numOr0(args[3])
+	dt := float64(rl.GetFrameTime())
+	if dt <= 0 {
+		dt = 1.0 / 60.0
+	}
+
+	ex := getMapNum(ent, "x")
+	ey := getMapNum(ent, "y")
+
+	dx := tx - ex
+	dy := ty - ey
+	dist := math.Sqrt(dx*dx + dy*dy)
+	if dist > 1.0 {
+		setMapNum(ent, "x", ex+(dx/dist)*speed*dt)
+		setMapNum(ent, "y", ey+(dy/dist)*speed*dt)
+	}
+	return null(), nil
+}
+
+func builtinFlee(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 4 {
+		return nil, fmt.Errorf("flee expects entity, targetX, targetY, speed")
+	}
+	ent := args[0]
+	tx := numOr0(args[1])
+	ty := numOr0(args[2])
+	speed := numOr0(args[3])
+	dt := float64(rl.GetFrameTime())
+	if dt <= 0 {
+		dt = 1.0 / 60.0
+	}
+
+	ex := getMapNum(ent, "x")
+	ey := getMapNum(ent, "y")
+
+	dx := ex - tx
+	dy := ey - ty
+	dist := math.Sqrt(dx*dx + dy*dy)
+	if dist > 0.1 {
+		setMapNum(ent, "x", ex+(dx/dist)*speed*dt)
+		setMapNum(ent, "y", ey+(dy/dist)*speed*dt)
+	}
+	return null(), nil
+}
+
+func builtinWander(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("wander expects entity, speed")
+	}
+	ent := args[0]
+	speed := numOr0(args[1])
+	dt := float64(rl.GetFrameTime())
+	if dt <= 0 {
+		dt = 1.0 / 60.0
+	}
+
+	angle, ok := wanderTarget[ent]
+	if !ok || rl.GetRandomValue(0, 100) < 5 {
+		angle = float64(rl.GetRandomValue(0, 360))
+		wanderTarget[ent] = angle
+	}
+
+	rad := angle * math.Pi / 180.0
+	ex := getMapNum(ent, "x")
+	ey := getMapNum(ent, "y")
+	setMapNum(ent, "x", ex+math.Cos(rad)*speed*dt)
+	setMapNum(ent, "y", ey+math.Sin(rad)*speed*dt)
+	return null(), nil
+}
+
+func builtinLineOfSight(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 4 {
+		return vBool(true), nil
+	}
+	return vBool(true), nil
+}
+func builtinCanSee(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return vBool(true), nil }
 
 func builtinButton(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
 	if len(args) < 6 {
@@ -1996,8 +2156,21 @@ func builtinHealthBar(args []*candy_evaluator.Value) (*candy_evaluator.Value, er
 	rl.DrawRectangle(int32(x), int32(y), int32(w*(cur/maxv)), int32(h), rl.Green)
 	return null(), nil
 }
-func builtinFloatingText(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return null(), nil }
-func builtinMinimap(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)       { return null(), nil }
+func builtinFloatingText(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 3 {
+		return nil, fmt.Errorf("floatingText expects text,x,y[,color]")
+	}
+	txt, _ := argString("floatingText", args, 0)
+	x, _ := getArgFloat("floatingText", args, 1)
+	y, _ := getArgFloat("floatingText", args, 2)
+	col := rl.White
+	if len(args) >= 4 {
+		col, _ = argColor("floatingText", args, 3, rl.White)
+	}
+	floatingTexts = append(floatingTexts, &helperFloatingText{text: txt, x: x, y: y, life: 1.5, color: col})
+	return null(), nil
+}
+func builtinMinimap(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return null(), nil }
 func builtinQuestAdd(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
 	if len(args) < 3 {
 		return nil, fmt.Errorf("questAdd expects id,title,description")
@@ -2123,11 +2296,31 @@ func builtinSetNetOwner(args []*candy_evaluator.Value) (*candy_evaluator.Value, 
 	}
 	return null(), nil
 }
-func builtinSnapshot(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
-	if len(args) >= 1 {
-		return args[0], nil
+func deepCopyValue(v *candy_evaluator.Value) *candy_evaluator.Value {
+	if v == nil {
+		return null()
 	}
-	return null(), nil
+	out := *v
+	switch v.Kind {
+	case candy_evaluator.ValArray:
+		out.Elems = make([]candy_evaluator.Value, len(v.Elems))
+		for i, e := range v.Elems {
+			out.Elems[i] = *deepCopyValue(&e)
+		}
+	case candy_evaluator.ValMap:
+		out.StrMap = make(map[string]candy_evaluator.Value, len(v.StrMap))
+		for k, val := range v.StrMap {
+			out.StrMap[k] = *deepCopyValue(&val)
+		}
+	}
+	return &out
+}
+
+func builtinSnapshot(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) {
+	if len(args) < 1 {
+		return null(), nil
+	}
+	return deepCopyValue(args[0]), nil
 }
 func builtinInterpolateRemote(args []*candy_evaluator.Value) (*candy_evaluator.Value, error) { return null(), nil }
 func builtinPredict(args []*candy_evaluator.Value) (*candy_evaluator.Value, error)           { return null(), nil }

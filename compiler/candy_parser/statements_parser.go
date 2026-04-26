@@ -81,6 +81,8 @@ func (p *Parser) parseStatement() candy_ast.Statement {
 		return p.parseIfWrapper()
 	case candy_token.IMPORT:
 		return p.parseImportStatement()
+	case candy_token.FROM:
+		return p.parseImportStatement()
 	case candy_token.STRUCT:
 		st := p.parseStructStatement()
 		if st != nil {
@@ -238,12 +240,15 @@ func (p *Parser) expectSemicolon() bool {
 		p.nextToken()
 		return true
 	}
-	// Satisfied by newline (ASI) or end of block/file.
-	// But we must move past the last token of the previous expression/statement
-	// to the next one (which might be the ASI semicolon or the next identifier).
-	if !p.curTokenIs(candy_token.EOF) && !p.curTokenIs(candy_token.RBRACE) {
+	if p.peekTokenIs(candy_token.SEMICOLON) {
 		p.nextToken()
+		p.nextToken()
+		return true
 	}
+	if p.curTokenIs(candy_token.RBRACE) || p.curTokenIs(candy_token.EOF) {
+		return true
+	}
+	p.nextToken()
 	return true
 }
 
@@ -327,13 +332,19 @@ func (p *Parser) parsePrintStatement() *candy_ast.ExpressionStatement {
 	if !p.expectSemicolon() {
 		return nil
 	}
+
+	args := []candy_ast.Expression{arg}
+	if tl, ok := arg.(*candy_ast.TupleLiteral); ok {
+		args = tl.Elems
+	}
+
 	// Lower to call so interpreter and LLVM see a normal call.
 	return &candy_ast.ExpressionStatement{
 		Token: tok,
 		Expression: &candy_ast.CallExpression{
 			Token:     tok,
 			Function:  &candy_ast.Identifier{Token: tok, Value: "println"},
-			Arguments: []candy_ast.Expression{arg},
+			Arguments: args,
 		},
 	}
 }
@@ -1067,6 +1078,7 @@ func (p *Parser) parseOneParam() candy_ast.Parameter {
 	if p.curTokenIs(candy_token.ASSIGN) {
 		p.nextToken() // move past =
 		def = p.parseExpression(LOWEST)
+		p.nextToken()
 	}
 	return candy_ast.Parameter{Token: n.Token, Name: n, TypeName: tn, Default: def}
 }
@@ -1122,6 +1134,18 @@ func (p *Parser) parseTypeIdentifier() candy_ast.Expression {
 		name += "?"
 	}
 	ident := &candy_ast.Identifier{Token: tok, Value: name, IsPointer: isPointer}
+	var left candy_ast.Expression = ident
+
+	for p.peekTokenIs(candy_token.DOT) {
+		p.nextToken() // .
+		p.nextToken() // ident
+		if !p.curTokenIs(candy_token.IDENT) && !p.curTokenIs(candy_token.INT) {
+			break
+		}
+		tok2 := p.curToken
+		right := &candy_ast.Identifier{Token: tok2, Value: p.curToken.Literal}
+		left = &candy_ast.DotExpression{Token: tok2, Left: left, Right: right}
+	}
 
 	if p.peekTokenIs(candy_token.LT) {
 		p.nextToken() // <
