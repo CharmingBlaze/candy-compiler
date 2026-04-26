@@ -86,6 +86,7 @@ type Parser struct {
 	l         *candy_lexer.Lexer
 	errors    []candy_report.Diagnostic
 	errorSeen map[string]struct{}
+	errorCount int
 	recovery  []string
 	curToken  candy_token.Token
 	peekToken candy_token.Token
@@ -96,11 +97,15 @@ type Parser struct {
 	exprStopAtBrace bool
 }
 
+const maxParseErrors = 100
+const maxParseSteps = 200000
+
 func New(l *candy_lexer.Lexer) *Parser {
 	p := &Parser{
 		l:              l,
 		errors:         []candy_report.Diagnostic{},
 		errorSeen:      make(map[string]struct{}),
+		errorCount:     0,
 		prefixParseFns: make(map[candy_token.TokenType]prefixParseFn),
 		infixParseFns:  make(map[candy_token.TokenType]infixParseFn),
 	}
@@ -189,12 +194,22 @@ func (p *Parser) registerInfix(t candy_token.TokenType, fn infixParseFn)   { p.i
 
 func (p *Parser) Errors() []candy_report.Diagnostic { return p.errors }
 func (p *Parser) peekError(t candy_token.TokenType) {
+	if p.errorCount >= maxParseErrors {
+		return
+	}
 	p.addErrorAt(p.peekToken, fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type))
 }
 func (p *Parser) addErrorf(f string, a ...any) {
+	if p.errorCount >= maxParseErrors {
+		return
+	}
 	p.addErrorAt(p.curToken, fmt.Sprintf(f, a...))
 }
 func (p *Parser) addErrorAt(tok candy_token.Token, msg string) {
+	if p.errorCount >= maxParseErrors {
+		return
+	}
+	p.errorCount++
 	full := fmt.Sprintf("%d:%d: %s", tok.Line, tok.Col, msg)
 	if p.errorSeen == nil {
 		p.errorSeen = make(map[string]struct{})
@@ -241,7 +256,13 @@ func (p *Parser) ParseProgram() *candy_ast.Program {
 	prog := &candy_ast.Program{Statements: []candy_ast.Statement{}}
 	// If recovery fails, avoid unbounded work.
 	lastOffset, lastType, stall := -1, candy_token.TokenType(""), 0
+	steps := 0
 	for {
+		steps++
+		if steps > maxParseSteps {
+			p.addErrorf("parse aborted: exceeded maximum parser steps")
+			break
+		}
 		if p.curTokenIs(candy_token.EOF) {
 			break
 		}
@@ -257,7 +278,7 @@ func (p *Parser) ParseProgram() *candy_ast.Program {
 			stall = 0
 			continue
 		}
-		if len(p.errors) > 500 {
+		if p.errorCount >= maxParseErrors {
 			p.addErrorf("too many parse errors, stopping")
 			break
 		}

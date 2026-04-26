@@ -77,13 +77,24 @@ func (l *Lexer) NextToken() candy_token.Token {
 	switch l.ch {
 	case '"':
 		l.readChar() // opening quote
-		s, err := l.readStringContent()
+		s, err := l.readStringContent('"')
 		if err != nil {
 			tok = candy_token.Token{Type: candy_token.ILLEGAL, Literal: err.Error(), Line: tLine, Col: tCol, Offset: tOff}
 		} else if l.ch != '"' {
 			tok = candy_token.Token{Type: candy_token.ILLEGAL, Literal: "unclosed string", Line: tLine, Col: tCol, Offset: tOff}
 		} else {
 			l.readChar() // closing "
+			tok = candy_token.Token{Type: candy_token.STR, Literal: s, Line: tLine, Col: tCol, Offset: tOff}
+		}
+	case '\'':
+		l.readChar() // opening quote
+		s, err := l.readStringContent('\'')
+		if err != nil {
+			tok = candy_token.Token{Type: candy_token.ILLEGAL, Literal: err.Error(), Line: tLine, Col: tCol, Offset: tOff}
+		} else if l.ch != '\'' {
+			tok = candy_token.Token{Type: candy_token.ILLEGAL, Literal: "unclosed string", Line: tLine, Col: tCol, Offset: tOff}
+		} else {
+			l.readChar() // closing '
 			tok = candy_token.Token{Type: candy_token.STR, Literal: s, Line: tLine, Col: tCol, Offset: tOff}
 		}
 	case '\n':
@@ -323,9 +334,9 @@ func (l *Lexer) skipSpaceAndComments() {
 	}
 }
 
-func (l *Lexer) readStringContent() (string, error) {
+func (l *Lexer) readStringContent(quote byte) (string, error) {
 	var b strings.Builder
-	for l.ch != '"' && l.ch != 0 {
+	for l.ch != quote && l.ch != 0 {
 		if l.ch == '\\' {
 			l.readChar()
 			switch l.ch {
@@ -337,6 +348,8 @@ func (l *Lexer) readStringContent() (string, error) {
 				b.WriteByte('\r')
 			case '"':
 				b.WriteByte('"')
+			case '\'':
+				b.WriteByte('\'')
 			case '{':
 				// Keep `\` + `{` in the literal so the string interpolator can treat it as a literal brace.
 				b.WriteByte('\\')

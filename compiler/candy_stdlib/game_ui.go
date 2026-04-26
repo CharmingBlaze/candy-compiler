@@ -150,11 +150,27 @@ class VBoxLayout {
     }
 
     fun draw() {
-        // layout logic
+        var y = padding
+        for el in elements {
+            if el == null { continue; }
+            el.position.y = y
+            y = y + el.size.y + spacing
+            el.draw()
+        }
     }
 }
 
-class HBoxLayout extends VBoxLayout {}
+class HBoxLayout extends VBoxLayout {
+    fun draw() {
+        var x = padding
+        for el in elements {
+            if el == null { continue; }
+            el.position.x = x
+            x = x + el.size.x + spacing
+            el.draw()
+        }
+    }
+}
 
 class GridLayout {
     var columns = 2
@@ -162,6 +178,18 @@ class GridLayout {
     var elements = []
 
     fun add(el) { elements.add(el); }
+    fun draw() {
+        var i = 0
+        for el in elements {
+            if el == null { continue; }
+            var col = i % columns
+            var row = i / columns
+            el.position.x = col * (el.size.x + spacing)
+            el.position.y = row * (el.size.y + spacing)
+            el.draw()
+            i = i + 1
+        }
+    }
 }
 
 object Anchor {
@@ -170,6 +198,10 @@ object Anchor {
     var BOTTOM_LEFT = 2
     var BOTTOM_RIGHT = 3
     var CENTER = 4
+    var TOP_CENTER = 5
+    var BOTTOM_CENTER = 6
+    var CENTER_LEFT = 7
+    var CENTER_RIGHT = 8
 }
 `
 }

@@ -502,14 +502,26 @@ func (p *Parser) parseTupleInfix(left candy_ast.Expression) candy_ast.Expression
 
 func (p *Parser) parseMapLiteral() candy_ast.Expression {
 	tok := p.curToken
-	if !p.expectPeek(candy_token.LBRACE) {
+	endTok := candy_token.TokenType(candy_token.RBRACE)
+	if p.peekTokenIs(candy_token.LBRACE) {
+		p.nextToken()
+	} else if p.peekTokenIs(candy_token.LPAREN) {
+		p.nextToken()
+		endTok = candy_token.RPAREN
+	} else {
+		p.addErrorf("expected { or ( after map, got %s", p.peekToken.Type)
 		return nil
 	}
-	p.nextToken()
+	p.nextToken() // first token inside map literal
 	var pairs []candy_ast.MapPair
-	for !p.curTokenIs(candy_token.RBRACE) && !p.curTokenIs(candy_token.EOF) {
+	for !p.curTokenIs(endTok) && !p.curTokenIs(candy_token.EOF) {
+		// Allow optional separators between entries.
+		if p.curTokenIs(candy_token.SEMICOLON) || p.curTokenIs(candy_token.COMMA) {
+			p.nextToken()
+			continue
+		}
 		ke := p.parseExpression(LOWEST)
-		if p.peekTokenIs(candy_token.RBRACE) {
+		if p.peekTokenIs(endTok) {
 			p.nextToken()
 			break
 		}
@@ -519,17 +531,17 @@ func (p *Parser) parseMapLiteral() candy_ast.Expression {
 		p.nextToken()
 		ve := p.parseExpression(LOWEST)
 		pairs = append(pairs, candy_ast.MapPair{Key: ke, Value: ve})
-		if p.peekTokenIs(candy_token.COMMA) {
+		if p.peekTokenIs(candy_token.COMMA) || p.peekTokenIs(candy_token.SEMICOLON) {
 			p.nextToken()
 			continue
 		}
-		if p.peekTokenIs(candy_token.RBRACE) {
+		if p.peekTokenIs(endTok) {
 			p.nextToken()
 			break
 		}
 	}
-	if !p.curTokenIs(candy_token.RBRACE) {
-		p.addErrorf("expected }, got %s", p.curToken.Type)
+	if !p.curTokenIs(endTok) {
+		p.addErrorf("expected %s, got %s", endTok, p.curToken.Type)
 		return nil
 	}
 	return &candy_ast.MapLiteral{Token: tok, Pairs: pairs}
@@ -542,6 +554,11 @@ func (p *Parser) parseBraceMapLiteral() candy_ast.Expression {
 	p.nextToken() // past '{'
 	var pairs []candy_ast.MapPair
 	for !p.curTokenIs(candy_token.RBRACE) && !p.curTokenIs(candy_token.EOF) {
+		// Optional separators in multiline object literals.
+		if p.curTokenIs(candy_token.SEMICOLON) || p.curTokenIs(candy_token.COMMA) {
+			p.nextToken()
+			continue
+		}
 		var ke candy_ast.Expression
 		var shorthandIdent *candy_ast.Identifier
 		if p.curTokenIs(candy_token.IDENT) || p.isKeyword(p.curToken.Type) {
@@ -569,7 +586,7 @@ func (p *Parser) parseBraceMapLiteral() candy_ast.Expression {
 		p.nextToken()
 		ve := p.parseExpression(LOWEST)
 		pairs = append(pairs, candy_ast.MapPair{Key: ke, Value: ve})
-		if p.peekTokenIs(candy_token.COMMA) {
+		if p.peekTokenIs(candy_token.COMMA) || p.peekTokenIs(candy_token.SEMICOLON) {
 			p.nextToken()
 			p.nextToken()
 			continue

@@ -6,11 +6,7 @@ import enet
 import json
 
 fun _netEncode(kind, name, payload) {
-    return json.encode({
-        "kind": kind,
-        "name": name,
-        "payload": payload
-    })
+    return json.encode({"kind": kind, "name": name, "payload": payload})
 }
 
 fun _netDecode(text) {
@@ -23,43 +19,60 @@ class NetworkServer {
     var rpcCallbacks = {}
     var onJoin = null
     var onLeave = null
+    var serverPort = 1234
+    var serverMaxPeers = 32
+    var serverChannels = 2
 
     fun init(port = 1234, maxPeers = 32, channels = 2) {
+        serverPort = port
+        serverMaxPeers = 32
+        serverChannels = 2
+        hostId = -1
+    }
+
+    fun start() {
+        if hostId >= 0 {
+            return
+        }
         enet.init()
-        var addr = enet.address("0.0.0.0", port)
-        hostId = enet.host_create(addr, maxPeers, channels, 0, 0)
+        var addr = enet.address("0.0.0.0", serverPort)
+        hostId = enet.host_create(addr, serverMaxPeers, serverChannels, 0, 0)
         if hostId < 0 {
             print("Failed to create server host")
-        } else {
-            print("Server started on port {port}")
+            return
         }
+        print("Server started on port " + toString(serverPort))
     }
 
     fun stop() {
         if hostId >= 0 {
             enet.host_destroy(hostId)
-            hostId = -1
         }
+        hostId = -1
         enet.deinit()
     }
 
     fun _addPeer(peerId) {
         for p in peers {
-            if p == peerId { return; }
+            if p == peerId {
+                return
+            }
         }
         peers.add(peerId)
     }
 
     fun _removePeer(peerId) {
-        var next = []
+        var peersNext = []
         for p in peers {
-            if p != peerId { next.add(p); }
+            if p != peerId { peersNext.add(p); }
         }
-        peers = next
+        peers = peersNext
     }
 
     fun update(timeoutMs = 0) {
-        if hostId < 0 { return; }
+        if hostId < 0 {
+            return
+        }
         var ev = enet.host_service(hostId, timeoutMs)
         while ev != null and ev.type != enet.EVENT_NONE {
             if ev.type == enet.EVENT_CONNECT {
@@ -77,11 +90,14 @@ class NetworkServer {
 
     fun handlePacket(peerId, data) {
         var msg = _netDecode(data)
-        if msg == null { return; }
+        if msg == null {
+            return
+        }
         if msg.kind == "rpc" {
             var method = msg.name
-            if rpcCallbacks[method] != null {
-                rpcCallbacks[method](peerId, msg.payload)
+            var cb = rpcCallbacks[method]
+            if cb != null {
+                cb(peerId, msg.payload)
             }
         }
     }
@@ -91,7 +107,9 @@ class NetworkServer {
     }
 
     fun send(peerId, method, payload) {
-        if hostId < 0 { return; }
+        if hostId < 0 {
+            return
+        }
         var data = _netEncode("rpc", method, payload)
         var pkt = enet.packet_create(data, enet.PACKET_RELIABLE)
         enet.peer_send(peerId, 0, pkt)
@@ -116,16 +134,34 @@ class NetworkClient {
     var connected = false
     var onConnect = null
     var onDisconnect = null
+    var clientChannels = 2
 
     fun init(channels = 2) {
+        clientChannels = 2
+        hostId = -1
+        peerId = -1
+        connected = false
+    }
+
+    fun start() {
+        if hostId >= 0 {
+            return
+        }
         enet.init()
-        hostId = enet.host_create(null, 1, channels, 0, 0)
+        hostId = enet.host_create(null, 1, clientChannels, 0, 0)
+        if hostId < 0 {
+            print("Failed to create client host")
+            return
+        }
     }
 
     fun connect(host, port, channels = 2) {
-        if hostId < 0 { return; }
+        clientChannels = channels
+        if hostId < 0 {
+            return
+        }
         var addr = enet.address(host, port)
-        peerId = enet.host_connect(hostId, addr, channels, 0)
+        peerId = enet.host_connect(hostId, addr, clientChannels, 0)
         if peerId < 0 {
             print("Failed to initiate connection")
         }
@@ -140,15 +176,17 @@ class NetworkClient {
     fun stop() {
         if hostId >= 0 {
             enet.host_destroy(hostId)
-            hostId = -1
         }
+        hostId = -1
         peerId = -1
         connected = false
         enet.deinit()
     }
 
     fun update(timeoutMs = 0) {
-        if hostId < 0 { return; }
+        if hostId < 0 {
+            return
+        }
         var ev = enet.host_service(hostId, timeoutMs)
         while ev != null and ev.type != enet.EVENT_NONE {
             if ev.type == enet.EVENT_CONNECT {
@@ -166,11 +204,14 @@ class NetworkClient {
 
     fun handlePacket(data) {
         var msg = _netDecode(data)
-        if msg == null { return; }
+        if msg == null {
+            return
+        }
         if msg.kind == "rpc" {
             var method = msg.name
-            if rpcCallbacks[method] != null {
-                rpcCallbacks[method](msg.payload)
+            var cb = rpcCallbacks[method]
+            if cb != null {
+                cb(msg.payload)
             }
         }
     }
@@ -180,7 +221,9 @@ class NetworkClient {
     }
 
     fun send(method, payload) {
-        if peerId < 0 { return; }
+        if peerId < 0 {
+            return
+        }
         var data = _netEncode("rpc", method, payload)
         var pkt = enet.packet_create(data, enet.PACKET_RELIABLE)
         enet.peer_send(peerId, 0, pkt)

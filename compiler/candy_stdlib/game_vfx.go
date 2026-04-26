@@ -25,7 +25,7 @@ class PostProcess {
         // beginDrawingToRenderTexture
     }
     
-    fun end() {
+    fun finish() {
         if !enabled { return; }
         // endDrawingToRenderTexture
         // for e in effects { drawWithShader(e); }

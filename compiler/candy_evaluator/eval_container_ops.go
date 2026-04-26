@@ -672,6 +672,68 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 			m["axes2d"] = axes
 			return recv, nil
 		}
+	case "mapaxis":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 3 || args[0] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "mapAxis(name, negative, positive)"}
+			}
+			axes := m["axes1d"]
+			if axes.Kind != ValMap || axes.StrMap == nil {
+				axes = Value{Kind: ValMap, StrMap: map[string]Value{}}
+			}
+			axes.StrMap[args[0].Str] = Value{Kind: ValArray, Elems: []Value{valueToValue(args[1]), valueToValue(args[2])}}
+			m["axes1d"] = axes
+			return recv, nil
+		}
+	case "map2daxis":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 3 || args[0] == nil || args[0].Kind != ValString || args[1] == nil || args[1].Kind != ValString || args[2] == nil || args[2].Kind != ValString {
+				return nil, &RuntimeError{Msg: "map2DAxis(name, xAxis, yAxis)"}
+			}
+			axes := m["axes2d"]
+			if axes.Kind != ValMap || axes.StrMap == nil {
+				axes = Value{Kind: ValMap, StrMap: map[string]Value{}}
+			}
+			axes.StrMap[args[0].Str] = Value{
+				Kind: ValMap,
+				StrMap: map[string]Value{
+					"x": {Kind: ValString, Str: args[1].Str},
+					"y": {Kind: ValString, Str: args[2].Str},
+				},
+			}
+			m["axes2d"] = axes
+			return recv, nil
+		}
+	case "getaxis":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "getAxis(name)"}
+			}
+			axes := m["axes1d"]
+			if axes.Kind != ValMap || axes.StrMap == nil {
+				return &Value{Kind: ValFloat, F64: 0}, nil
+			}
+			b, okB := axes.StrMap[args[0].Str]
+			if !okB || b.Kind != ValArray || len(b.Elems) < 2 {
+				return &Value{Kind: ValFloat, F64: 0}, nil
+			}
+			readDown := func(keyVal Value) bool {
+				if fn, ok := Builtins["iskeydown"]; ok {
+					kv := keyVal
+					v, err := fn([]*Value{&kv})
+					return err == nil && v != nil && v.Truthy()
+				}
+				return false
+			}
+			value := 0.0
+			if readDown(b.Elems[0]) {
+				value -= 1
+			}
+			if readDown(b.Elems[1]) {
+				value += 1
+			}
+			return &Value{Kind: ValFloat, F64: value}, nil
+		}
 	case "getaxis2d", "get2daxis":
 		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
 			if len(args) != 1 || args[0] == nil || args[0].Kind != ValString {
@@ -682,7 +744,7 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 				return &Value{Kind: ValVec, Vec: []float64{0, 0}}, nil
 			}
 			b, okB := axes.StrMap[args[0].Str]
-			if !okB || b.Kind != ValArray || len(b.Elems) < 4 {
+			if !okB {
 				return &Value{Kind: ValVec, Vec: []float64{0, 0}}, nil
 			}
 			getDown := func(keyVal Value) bool {
@@ -695,6 +757,35 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 					return err == nil && v != nil && v.Truthy()
 				}
 				return false
+			}
+			readAxis := func(axisName string) float64 {
+				axes1 := m["axes1d"]
+				if axes1.Kind != ValMap || axes1.StrMap == nil {
+					return 0
+				}
+				axisPair, okA := axes1.StrMap[axisName]
+				if !okA || axisPair.Kind != ValArray || len(axisPair.Elems) < 2 {
+					return 0
+				}
+				value := 0.0
+				if getDown(axisPair.Elems[0]) {
+					value -= 1
+				}
+				if getDown(axisPair.Elems[1]) {
+					value += 1
+				}
+				return value
+			}
+			if b.Kind == ValMap && b.StrMap != nil {
+				xAxis, okX := b.StrMap["x"]
+				yAxis, okY := b.StrMap["y"]
+				if okX && okY && xAxis.Kind == ValString && yAxis.Kind == ValString {
+					return &Value{Kind: ValVec, Vec: []float64{readAxis(xAxis.Str), readAxis(yAxis.Str)}}, nil
+				}
+				return &Value{Kind: ValVec, Vec: []float64{0, 0}}, nil
+			}
+			if b.Kind != ValArray || len(b.Elems) < 4 {
+				return &Value{Kind: ValVec, Vec: []float64{0, 0}}, nil
 			}
 			x := 0.0
 			y := 0.0
@@ -712,7 +803,7 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 			}
 			return &Value{Kind: ValVec, Vec: []float64{x, y}}, nil
 		}
-	case "ispressed", "isdown", "justpressed", "justreleased":
+	case "ispressed", "isdown", "isheld", "justpressed", "justreleased":
 		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
 			if len(args) != 1 || args[0] == nil || args[0].Kind != ValString {
 				return nil, &RuntimeError{Msg: "isPressed(action) / justPressed(action) / justReleased(action)"}
@@ -727,7 +818,7 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 			}
 			bname := "iskeypressed"
 			switch ln {
-			case "isdown":
+			case "isdown", "isheld":
 				bname = "iskeydown"
 			case "justreleased":
 				bname = "iskeyreleased"
@@ -755,6 +846,52 @@ func callMapMethod(recv *Value, name string, argExprs []candy_ast.Expression, e 
 				return fn([]*Value{&kk})
 			}
 			return &Value{Kind: ValBool, B: false}, nil
+		}
+	case "getmouseposition":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if fn, ok := Builtins["getmouseposition"]; ok {
+				return fn([]*Value{})
+			}
+			return &Value{Kind: ValNull}, nil
+		}
+	case "getmousedelta":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if fn, ok := Builtins["getmousedelta"]; ok {
+				return fn([]*Value{})
+			}
+			return &Value{Kind: ValNull}, nil
+		}
+	case "getmousescroll":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if fn, ok := Builtins["getmousewheelmove"]; ok {
+				return fn([]*Value{})
+			}
+			return &Value{Kind: ValFloat, F64: 0}, nil
+		}
+	case "pushcontext":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			if len(args) != 1 || args[0] == nil || args[0].Kind != ValString {
+				return nil, &RuntimeError{Msg: "pushContext(name)"}
+			}
+			ctx := m["contexts"]
+			if ctx.Kind != ValArray {
+				ctx = Value{Kind: ValArray, Elems: []Value{}}
+			}
+			ctx.Elems = append(ctx.Elems, Value{Kind: ValString, Str: args[0].Str})
+			m["contexts"] = ctx
+			return recv, nil
+		}
+	case "popcontext":
+		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "inputmap") {
+			ctx := m["contexts"]
+			if ctx.Kind != ValArray || len(ctx.Elems) == 0 {
+				return &Value{Kind: ValNull}, nil
+			}
+			last := ctx.Elems[len(ctx.Elems)-1]
+			ctx.Elems = ctx.Elems[:len(ctx.Elems)-1]
+			m["contexts"] = ctx
+			ret := last
+			return &ret, nil
 		}
 	case "move":
 		if mtype, ok := m["type"]; ok && mtype.Kind == ValString && strings.EqualFold(mtype.Str, "charactercontroller") {

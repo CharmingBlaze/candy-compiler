@@ -105,6 +105,31 @@ var foobar = 838383;
 	}
 }
 
+func TestVarStatements_WithoutInitializer(t *testing.T) {
+	input := `
+var a
+var b: Int
+int c
+`
+	l := candy_lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 3 {
+		t.Fatalf("expected 3 statements, got %d", len(program.Statements))
+	}
+	for i, st := range program.Statements {
+		vs, ok := st.(*candy_ast.VarStatement)
+		if !ok {
+			t.Fatalf("stmt[%d] expected *VarStatement, got %T", i, st)
+		}
+		if vs.Value != nil {
+			t.Fatalf("stmt[%d] expected nil initializer, got %#v", i, vs.Value)
+		}
+	}
+}
+
 func testVarStatement(t *testing.T, s candy_ast.Statement, name string) bool {
 	if s.TokenLiteral() != "var" {
 		t.Errorf("s.TokenLiteral not 'var'. got=%q", s.TokenLiteral())
@@ -492,6 +517,7 @@ func TestWhenExpressionParsing(t *testing.T) {
 	}
 }
 
+
 func TestInlineObjectLiteralParsing(t *testing.T) {
 	input := `point = {x: 10, y: 20};`
 	l := candy_lexer.New(input)
@@ -500,6 +526,26 @@ func TestInlineObjectLiteralParsing(t *testing.T) {
 	checkParserErrors(t, p)
 	if len(program.Statements) != 1 {
 		t.Fatalf("expected 1 statement, got %d", len(program.Statements))
+	}
+}
+
+func TestMapLiteral_AllowsParenWrapperAndNoSemicolons(t *testing.T) {
+	input := `
+obj1 = map(
+  "a": 1
+  "b": 2
+)
+obj2 = {
+  x: 10
+  y: 20
+}
+`
+	l := candy_lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	if len(program.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(program.Statements))
 	}
 }
 

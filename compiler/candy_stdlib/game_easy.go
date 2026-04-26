@@ -22,14 +22,9 @@ import candy.network
 // High-level batteries-included facade so projects can start quickly
 // while still exposing all lower-level systems for advanced users.
 object Game2D {
+    // One-line map return: multiline return { } has been misparsed as a block in some method bodies.
     fun createWorld() {
-        return {
-            "scene": Scene(),
-            "physics": Physics2D(),
-            "camera": Camera2D(),
-            "ui": Canvas(),
-            "state": StateMachine()
-        }
+        return { "scene": Scene(), "physics": Physics2D(), "camera": Camera2D(), "ui": Canvas(), "state": StateMachine() }
     }
 
     fun tick(world, dt) {
@@ -40,13 +35,7 @@ object Game2D {
 
 object Game3D {
     fun createWorld() {
-        return {
-            "scene": Scene(),
-            "physics": Physics3D(),
-            "camera": ThirdPersonRig(null),
-            "ui": Canvas(),
-            "state": StateMachine()
-        }
+        return { "scene": Scene(), "physics": Physics3D(), "camera": ThirdPersonRig(null), "ui": Canvas(), "state": StateMachine() }
     }
 
     fun tick(world, dt) {

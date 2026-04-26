@@ -248,6 +248,13 @@ func (p *Parser) expectSemicolon() bool {
 	if p.curTokenIs(candy_token.RBRACE) || p.curTokenIs(candy_token.EOF) {
 		return true
 	}
+	// Optional semicolons: consume one token when we can prove a statement boundary.
+	// This avoids stalls in block/class parsers that don't have ParseProgram's recovery loop.
+	if p.peekTokenIs(candy_token.RBRACE) || p.peekTokenIs(candy_token.EOF) || p.isStatementStart(p.peekToken.Type) {
+		p.nextToken()
+		return true
+	}
+	// Recovery fallback: advance once so the parser can make progress.
 	p.nextToken()
 	return true
 }
@@ -294,11 +301,11 @@ func (p *Parser) parseVarStatement() *candy_ast.VarStatement {
 		p.nextToken()
 		s.TypeName = p.parseTypeIdentifier()
 	}
-	if !p.expectPeek(candy_token.ASSIGN) {
-		return nil
+	if p.peekTokenIs(candy_token.ASSIGN) {
+		p.nextToken() // =
+		p.nextToken() // to rhs
+		s.Value = p.parseExpression(LOWEST)
 	}
-	p.nextToken()
-	s.Value = p.parseExpression(LOWEST)
 	if !p.expectSemicolon() {
 		return nil
 	}
@@ -446,8 +453,8 @@ func (p *Parser) parseTypeLedStatement() candy_ast.Statement {
 	}
 
 	if p.peekTokenIs(candy_token.ASSIGN) {
-		p.nextToken()
-		p.nextToken()
+		p.nextToken() // =
+		p.nextToken() // to rhs
 		s.Value = p.parseExpression(LOWEST)
 	}
 
@@ -459,11 +466,11 @@ func (p *Parser) parseTypeLedStatement() candy_ast.Statement {
 
 func (p *Parser) parseTypedVarStatement(typeName, name *candy_ast.Identifier) *candy_ast.VarStatement {
 	s := &candy_ast.VarStatement{Token: typeName.Token, Name: name, TypeName: typeName}
-	if !p.expectPeek(candy_token.ASSIGN) {
-		return nil
+	if p.peekTokenIs(candy_token.ASSIGN) {
+		p.nextToken()
+		p.nextToken()
+		s.Value = p.parseExpression(LOWEST)
 	}
-	p.nextToken()
-	s.Value = p.parseExpression(LOWEST)
 	if !p.expectSemicolon() {
 		return nil
 	}

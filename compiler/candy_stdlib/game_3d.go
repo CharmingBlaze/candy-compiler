@@ -4,9 +4,16 @@ func init() {
 	Modules["candy.3d"] = `
 import candy.math
 
+object Quat {
+    fun identity() {
+        return {"x": 0, "y": 0, "z": 0, "w": 1}
+    }
+}
+
 class Entity3D {
     var position = vec3(0, 0, 0)
     var rotation = vec3(0, 0, 0)
+    var quaternion = Quat.identity()
     var scale = vec3(1, 1, 1)
     var parent = null
     var children = []
@@ -37,6 +44,15 @@ class Entity3D {
         rotation.x = rotation.x + axis.x * angle
         rotation.y = rotation.y + axis.y * angle
         rotation.z = rotation.z + axis.z * angle
+    }
+
+    fun getTransform() {
+        return {
+            "position": position,
+            "rotation": rotation,
+            "quaternion": quaternion,
+            "scale": scale
+        }
     }
 
     fun update(dt) {
@@ -78,23 +94,34 @@ class Mesh extends Entity3D {
         // Upload to GPU logic
     }
 
-    object sphere {
-        fun create(radius: float, segments: int) {
-            // genMeshSphere
-        }
+    // Untyped params + defaults: avoid typed defaults on these class methods (parser limitation).
+    fun sphere(radius = 1.0, segments = 16) {
+        return {"type": "sphere", "radius": radius, "segments": segments}
     }
-    
-    object cube {
-        fun create(size: vec3) {
-            // genMeshCube
-        }
+    fun cube(size = vec3(1, 1, 1)) {
+        return {"type": "cube", "size": size}
     }
+    fun plane(width = 1.0, height = 1.0) {
+        return {"type": "plane", "width": width, "height": height}
+    }
+    fun cylinder(radius = 1.0, height = 1.0) {
+        return {"type": "cylinder", "radius": radius, "height": height}
+    }
+}
+
+class Material {
+    var diffuse = COLOR_WHITE
+    var texture = null
+    var normalMap = null
+    var metallic = 0.0
+    var roughness = 1.0
 }
 
 class Camera3D {
     var position = vec3(0, 10, 10)
     var target = vec3(0, 0, 0)
     var up = vec3(0, 1, 0)
+    var rotation = vec3(0, 0, 0)
     var fov = 60.0
     var near = 0.1
     var far = 1000.0
@@ -272,8 +299,9 @@ class Animator {
     fun pause() { paused = true; }
     fun resume() { paused = false; }
 
-    fun crossFade(from, to, duration = 0.2) {
-        current = to
+    // from / to: use fromState, toState param names (from/to are keywords in the lexer).
+    fun crossFade(fromState, toState, duration = 0.2) {
+        current = toState
     }
 
     fun onEvent(name, callback) {
@@ -296,15 +324,15 @@ class AnimationStateMachine {
         if current == "" { current = name; }
     }
 
-    fun addTransition(from, to, condition) {
-        transitions.add({"from": from, "to": to, "condition": condition})
+    fun addTransition(fromState, toState, condition) {
+        transitions.add({"from": fromState, "to": toState, "condition": condition})
     }
 
     fun update(dt) {
         for t in transitions {
-            if t.from == current or t.from == "*" {
-                if t.condition() {
-                    current = t.to
+            if t["from"] == current or t["from"] == "*" {
+                if t["condition"]() {
+                    current = t["to"]
                     if animator != null and states[current] != null {
                         animator.play(states[current], true)
                     }

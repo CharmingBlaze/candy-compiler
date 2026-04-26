@@ -5,10 +5,20 @@ import (
 	"candy/candy_token"
 )
 
-// parseWhenExpression parses: when { cond: expr; ... else: expr; }.
+// parseWhenExpression parses:
+//   - when { cond: expr; ... else: expr; }
+//   - when (subject) { arm => expr; else => expr; }  // sugar via subject matching
 func (p *Parser) parseWhenExpression() candy_ast.Expression {
 	tok := p.curToken
 	w := &candy_ast.WhenExpression{Token: tok}
+	if p.peekTokenIs(candy_token.LPAREN) {
+		p.nextToken() // to (
+		p.nextToken() // start subject
+		w.Subject = p.parseExpression(LOWEST)
+		if !p.expectPeek(candy_token.RPAREN) {
+			return w
+		}
+	}
 	if !p.expectPeek(candy_token.LBRACE) {
 		return w
 	}

@@ -462,6 +462,7 @@ func (c *Checker) expr(n candy_ast.Expression) {
 			}
 		}
 	case *candy_ast.WhenExpression:
+		c.expr(t.Subject)
 		want := "any"
 		for _, a := range t.Arms {
 			c.expr(a.Cond)

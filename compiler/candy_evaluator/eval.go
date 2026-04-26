@@ -86,9 +86,15 @@ func evalStatement(s candy_ast.Statement, e *Env) (any, error) {
 		e.Set(t.Name.Value, v)
 		return v, nil
 	case *candy_ast.VarStatement:
-		v, err := evalExpression(t.Value, e)
-		if err != nil {
-			return nil, err
+		var v *Value
+		var err error
+		if t.Value != nil {
+			v, err = evalExpression(t.Value, e)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			v = &Value{Kind: ValNull}
 		}
 		e.Set(t.Name.Value, v)
 		return v, nil
@@ -536,10 +542,24 @@ func evalExpression(ex candy_ast.Expression, e *Env) (*Value, error) {
 		}
 		return &Value{Kind: ValMap, StrMap: sm}, nil
 	case *candy_ast.WhenExpression:
+		var subject *Value
+		var err error
+		if t.Subject != nil {
+			subject, err = evalExpression(t.Subject, e)
+			if err != nil {
+				return nil, err
+			}
+		}
 		for _, a := range t.Arms {
 			c, err := evalExpression(a.Cond, e)
 			if err != nil {
 				return nil, err
+			}
+			if t.Subject != nil {
+				if valueEqual(subject, c) {
+					return evalExpression(a.Body, e)
+				}
+				continue
 			}
 			if c.Truthy() {
 				return evalExpression(a.Body, e)
@@ -752,16 +772,17 @@ func evalExpression(ex candy_ast.Expression, e *Env) (*Value, error) {
 					}
 					return f(args)
 				}
-			}
-			// Inside object/class methods, allow bare method calls to resolve on `this`.
-			// Example: `add(entity)` resolves as `this.add(entity)`.
-			if _, okThis := e.Get("this"); okThis {
-				dot := &candy_ast.DotExpression{
-					Token: t.Token,
-					Left:  &candy_ast.Identifier{Token: t.Token, Value: "this"},
-					Right: &candy_ast.Identifier{Token: t.Token, Value: id.Value},
+				// Inside object/class methods, allow bare method calls to resolve on `this`.
+				// Example: `add(entity)` resolves as `this.add(entity)`.
+				// Must not run when id names a class/function in the environment (e.g. Scene() vs this.scene()).
+				if _, okThis := e.Get("this"); okThis {
+					dot := &candy_ast.DotExpression{
+						Token: t.Token,
+						Left:  &candy_ast.Identifier{Token: t.Token, Value: "this"},
+						Right: &candy_ast.Identifier{Token: t.Token, Value: id.Value},
+					}
+					return evalMethodCall(dot, t.Arguments, e)
 				}
-				return evalMethodCall(dot, t.Arguments, e)
 			}
 		}
 		fnv, err := evalExpression(t.Function, e)
@@ -1131,6 +1152,10 @@ func evalImport(path string, env *Env) error {
 	}
 	full := path
 	if src, ok := candy_stdlib.Lookup(path); ok {
+		stdlibKey := "__stdlib__:" + path
+		if env.Imported[stdlibKey] {
+			return nil
+		}
 		l := candy_lexer.New(src)
 		p := candy_parser.New(l)
 		prog := p.ParseProgram()
@@ -1146,7 +1171,11 @@ func evalImport(path string, env *Env) error {
 			}
 			return &RuntimeError{Msg: "stdlib import parse error: " + strings.Join(msgs, "; ")}
 		}
+		env.Imported[stdlibKey] = true
 		_, eerr := Eval(prog, env)
+		if eerr != nil {
+			delete(env.Imported, stdlibKey)
+		}
 		return eerr
 	}
 	if !filepath.IsAbs(full) {

@@ -11,6 +11,8 @@ type WhenArm struct {
 // WhenExpression is a simplified `when` (arms evaluated in order; first true cond runs body).
 type WhenExpression struct {
 	Token candy_token.Token
+	// Optional Kotlin-style subject: `when (subject) { ... }`
+	Subject Expression
 	Arms  []WhenArm
 	ElseV Expression
 }

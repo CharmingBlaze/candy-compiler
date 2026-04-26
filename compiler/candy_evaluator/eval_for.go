@@ -18,7 +18,7 @@ func evalForIn(t *candy_ast.ForStatement, e *Env) (any, error) {
 	switch it.Kind {
 	case ValArray:
 		for i, el := range it.Elems {
-			ne := newIsolatedLoopEnv(e)
+			ne := e.NewEnclosed()
 			ee := el
 			ne.Set(name, ptrVal(ee))
 			if t.ValueVar != nil {
@@ -38,7 +38,7 @@ func evalForIn(t *candy_ast.ForStatement, e *Env) (any, error) {
 	case ValString:
 		idx := 0
 		for _, ru := range it.Str {
-			ne := newIsolatedLoopEnv(e)
+			ne := e.NewEnclosed()
 			c := &Value{Kind: ValString, Str: string(ru)}
 			ne.Set(name, c)
 			if t.ValueVar != nil {
@@ -61,7 +61,7 @@ func evalForIn(t *candy_ast.ForStatement, e *Env) (any, error) {
 			return nil, nil
 		}
 		for k, v := range it.StrMap {
-			ne := newIsolatedLoopEnv(e)
+			ne := e.NewEnclosed()
 			ne.Set(name, &Value{Kind: ValString, Str: k})
 			if t.ValueVar != nil {
 				vv := v
@@ -278,7 +278,7 @@ func evalForEach(t *candy_ast.ForEachStatement, e *Env) (any, error) {
 
 	// Helper for loop body execution
 	runBody := func(v *Value) (any, error) {
-		ne := newIsolatedLoopEnv(e)
+		ne := e.NewEnclosed()
 		ne.Set(name, v)
 		return runBlockInEnv(t.Body, ne)
 	}
@@ -336,35 +336,6 @@ func evalForEach(t *candy_ast.ForEachStatement, e *Env) (any, error) {
 		}
 	}
 	return nil, nil
-}
-
-func snapshotVisibleBindings(e *Env) map[string]*Value {
-	out := make(map[string]*Value)
-	var chain []*Env
-	for cur := e; cur != nil; cur = cur.Parent {
-		chain = append(chain, cur)
-	}
-	for i := len(chain) - 1; i >= 0; i-- {
-		for k, v := range chain[i].Store {
-			if v == nil {
-				out[k] = &Value{Kind: ValNull}
-				continue
-			}
-			vv := *v
-			out[k] = &vv
-		}
-	}
-	return out
-}
-
-func newIsolatedLoopEnv(parent *Env) *Env {
-	ne := parent.NewEnclosed()
-	// Snapshot visible bindings into the loop-body scope so assignment
-	// stays iteration-local instead of mutating outer bindings.
-	for k, vv := range snapshotVisibleBindings(parent) {
-		ne.Set(k, vv)
-	}
-	return ne
 }
 
 func evalRepeat(t *candy_ast.RepeatStatement, e *Env) (any, error) {

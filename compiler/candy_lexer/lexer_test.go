@@ -190,6 +190,30 @@ val e2 = 2E3;`
 		}
 		expectTokens(t, input, cases)
 	})
+	t.Run("single_quoted_strings_and_empty", func(t *testing.T) {
+		input := `val a = '';
+val b = 'hi';
+val c = "ok";`
+		cases := []tokCase{
+			{candy_token.VAL, "val"},
+			{candy_token.IDENT, "a"},
+			{candy_token.ASSIGN, "="},
+			{candy_token.STR, ""},
+			{candy_token.SEMICOLON, ";"},
+			{candy_token.VAL, "val"},
+			{candy_token.IDENT, "b"},
+			{candy_token.ASSIGN, "="},
+			{candy_token.STR, "hi"},
+			{candy_token.SEMICOLON, ";"},
+			{candy_token.VAL, "val"},
+			{candy_token.IDENT, "c"},
+			{candy_token.ASSIGN, "="},
+			{candy_token.STR, "ok"},
+			{candy_token.SEMICOLON, ";"},
+			{candy_token.EOF, ""},
+		}
+		expectTokens(t, input, cases)
+	})
 	t.Run("nullable_type_suffix_token", func(t *testing.T) {
 		input := `fun f(x: Int?): Int? { return null; };`
 		cases := []tokCase{

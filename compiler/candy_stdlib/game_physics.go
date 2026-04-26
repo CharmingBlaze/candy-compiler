@@ -4,6 +4,51 @@ func init() {
 	Modules["candy.physics2d"] = `
 import candy.math
 
+fun _radius2d(body) {
+    if body == null { return 0.5; }
+    if body.collider == null { return 0.5; }
+    if body.collider.radius != null { return body.collider.radius; }
+    if body.collider.size != null {
+        var sx = body.collider.size.x
+        var sy = body.collider.size.y
+        return math.max(sx, sy) * 0.5
+    }
+    if body.collider.width != null and body.collider.height != null {
+        return math.max(body.collider.width, body.collider.height) * 0.5
+    }
+    return 0.5
+}
+
+fun _findCollision2d(world, selfBody) {
+    if world == null or world.bodies == null { return null; }
+    for other in world.bodies {
+        if other == null or other == selfBody { continue; }
+        if other.position == null { continue; }
+        var dx = selfBody.position.x - other.position.x
+        var dy = selfBody.position.y - other.position.y
+        var rr = _radius2d(selfBody) + _radius2d(other)
+        var d2 = dx * dx + dy * dy
+        if d2 <= rr * rr {
+            var len = math.sqrt(d2)
+            var nx = 1.0
+            var ny = 0.0
+            if len > 0.00001 {
+                nx = dx / len
+                ny = dy / len
+            }
+            return {
+                "body": other,
+                "normal": vec2(nx, ny),
+                "point": vec2(
+                    selfBody.position.x - nx * _radius2d(selfBody),
+                    selfBody.position.y - ny * _radius2d(selfBody)
+                )
+            }
+        }
+    }
+    return null
+}
+
 class BoxCollider {
     var size = vec2(0, 0)
     var offset = vec2(0, 0)
@@ -45,15 +90,35 @@ class KinematicBody2D {
     var position = vec2(0, 0)
     var velocity = vec2(0, 0)
     var collider = null
+    var world = null
 
     fun moveAndCollide(motion) {
         position.x = position.x + motion.x
         position.y = position.y + motion.y
-        return {"position": position, "collided": false}
+        var hit = _findCollision2d(world, this)
+        if hit == null {
+            return {"position": position, "collided": false}
+        }
+        return {
+            "position": position,
+            "collided": true,
+            "collider": hit.body,
+            "normal": hit.normal,
+            "point": hit.point
+        }
     }
 
     fun moveAndSlide(motion) {
-        moveAndCollide(motion)
+        var result = moveAndCollide(motion)
+        if result.collided {
+            var n = result.normal
+            var dot = motion.x * n.x + motion.y * n.y
+            var sx = motion.x - n.x * dot
+            var sy = motion.y - n.y * dot
+            position.x = position.x + sx
+            position.y = position.y + sy
+        }
+        return result
     }
 }
 
@@ -80,10 +145,12 @@ class Physics2D {
     
     fun add(body) {
         bodies.add(body)
+        if body != null { body.world = this; }
     }
     
     fun remove(body) {
         bodies.remove(body)
+        if body != null and body.world == this { body.world = null; }
     }
     
     fun update(dt) {
@@ -115,10 +182,7 @@ class Physics2D {
             var ex = bx - px
             var ey = by - py
             var dist2 = ex * ex + ey * ey
-            var radius = 0.5
-            if b.collider != null and b.collider.radius != null {
-                radius = b.collider.radius
-            }
+            var radius = _radius2d(b)
             if dist2 <= radius * radius {
                 var along2 = (px - startPos.x) * (px - startPos.x) + (py - startPos.y) * (py - startPos.y)
                 if along2 < bestDist {
@@ -135,8 +199,7 @@ class Physics2D {
             if b == null or b.position == null { continue; }
             var dx = b.position.x - point.x
             var dy = b.position.y - point.y
-            var r = 0.5
-            if b.collider != null and b.collider.radius != null { r = b.collider.radius; }
+            var r = _radius2d(b)
             if dx * dx + dy * dy <= r * r { return b; }
         }
         return null
@@ -160,6 +223,16 @@ class Physics2D {
 	Modules["candy.physics3d"] = `
 import candy.math
 
+fun _radius3d(body) {
+    if body == null { return 0.6; }
+    if body.collider == null { return 0.6; }
+    if body.collider.radius != null { return body.collider.radius; }
+    if body.collider.size != null {
+        return math.max(body.collider.size.x, math.max(body.collider.size.y, body.collider.size.z)) * 0.5
+    }
+    return 0.6
+}
+
 class BoxCollider3D {
     var size = vec3(1, 1, 1)
     fun init(size) { this.size = size; }
@@ -176,6 +249,10 @@ class CapsuleCollider3D {
     fun init(radius, height) { this.radius = radius; this.height = height; }
 }
 
+class BoxCollider extends BoxCollider3D {}
+class SphereCollider extends SphereCollider3D {}
+class CapsuleCollider extends CapsuleCollider3D {}
+
 class MeshCollider {
     var mesh = null
     fun init(mesh) { this.mesh = mesh; }
@@ -190,16 +267,50 @@ class KinematicBody3D {
     var position = vec3(0, 0, 0)
     var velocity = vec3(0, 0, 0)
     var collider = null
+    var world = null
 
     fun moveAndCollide(motion) {
         position.x = position.x + motion.x
         position.y = position.y + motion.y
         position.z = position.z + motion.z
+        if world == null {
+            return {"position": position, "collided": false}
+        }
+        for b in world.bodies {
+            if b == null or b == this or b.position == null { continue; }
+            var dx = position.x - b.position.x
+            var dy = position.y - b.position.y
+            var dz = position.z - b.position.z
+            var rr = _radius3d(this) + _radius3d(b)
+            var d2 = dx * dx + dy * dy + dz * dz
+            if d2 <= rr * rr {
+                var len = math.sqrt(d2)
+                var nx = 1.0; var ny = 0.0; var nz = 0.0
+                if len > 0.00001 {
+                    nx = dx / len; ny = dy / len; nz = dz / len
+                }
+                return {
+                    "position": position,
+                    "collided": true,
+                    "collider": b,
+                    "normal": vec3(nx, ny, nz),
+                    "point": vec3(position.x - nx * _radius3d(this), position.y - ny * _radius3d(this), position.z - nz * _radius3d(this))
+                }
+            }
+        }
         return {"position": position, "collided": false}
     }
 
     fun moveAndSlide(motion) {
-        moveAndCollide(motion)
+        var result = moveAndCollide(motion)
+        if result.collided {
+            var n = result.normal
+            var dot = motion.x * n.x + motion.y * n.y + motion.z * n.z
+            position.x = position.x + (motion.x - n.x * dot)
+            position.y = position.y + (motion.y - n.y * dot)
+            position.z = position.z + (motion.z - n.z * dot)
+        }
+        return result
     }
 }
 
@@ -279,6 +390,12 @@ class Physics3D {
 
     fun add(body) {
         bodies.add(body)
+        if body != null { body.world = this; }
+    }
+
+    fun remove(body) {
+        bodies.remove(body)
+        if body != null and body.world == this { body.world = null; }
     }
 
     fun update(dt) {
@@ -321,10 +438,7 @@ class Physics3D {
             var ey = by - py
             var ez = bz - pz
             var dist2 = ex * ex + ey * ey + ez * ez
-            var radius = 0.6
-            if b.collider != null and b.collider.radius != null {
-                radius = b.collider.radius
-            }
+            var radius = _radius3d(b)
             if dist2 <= radius * radius {
                 var along2 = (px - startPos.x) * (px - startPos.x) + (py - startPos.y) * (py - startPos.y) + (pz - startPos.z) * (pz - startPos.z)
                 if along2 < bestDist {

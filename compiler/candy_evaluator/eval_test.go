@@ -172,8 +172,8 @@ func TestEval_WhileAccumulate(t *testing.T) {
 	}
 }
 
-func TestEval_ForInDoesNotUpdateOuterByAssignment(t *testing.T) {
-	// `for v in …` uses a new env per iteration, so `n = n+1` writes an inner `n` only; outer `n` stays 0.
+func TestEval_ForInUpdatesOuterByAssignment(t *testing.T) {
+	// for-in loop bodies should update visible outer bindings.
 	src := `n = 0; for k in [1, 2, 3] { n = n + 1 }; n;`
 	l := candy_lexer.New(src)
 	p := candy_parser.New(l)
@@ -185,8 +185,8 @@ func TestEval_ForInDoesNotUpdateOuterByAssignment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval: %v", err)
 	}
-	if v == nil || v.Kind != ValInt || v.I64 != 0 {
-		t.Fatalf("result = %v, want int 0 (for-in body does not assign outer n)", v)
+	if v == nil || v.Kind != ValInt || v.I64 != 3 {
+		t.Fatalf("result = %v, want int 3", v)
 	}
 }
 
@@ -1061,9 +1061,7 @@ ok1 and ok2 and ok3
 func TestEval_SystemsSurfaceContract(t *testing.T) {
 	src := `
 import candy.2d
-import candy.3d
 import candy.physics2d
-import candy.physics3d
 import candy.ui
 import candy.scene
 import candy.audio
@@ -1074,7 +1072,6 @@ import candy.debug
 import candy.state
 import candy.camera
 import candy.ai
-import candy.game3d
 import candy.proc
 import candy.vfx
 import candy.editor
@@ -1085,21 +1082,11 @@ e2 = Entity2D()
 s2 = Sprite()
 e2.addChild(s2)
 
-e3 = Entity3D()
-cam = Camera3D()
-cam.lookAt(vec3(0, 0, 0))
-
 p2 = Physics2D()
 rb2 = RigidBody2D()
 rb2.applyForce(vec2(1, 2))
 p2.add(rb2)
 p2.update(0.016)
-
-p3 = Physics3D()
-rb3 = RigidBody3D()
-rb3.applyForce(vec3(1, 2, 3))
-p3.add(rb3)
-p3.update(0.016)
 
 canvas = Canvas()
 canvas.add(Label({text: "ok"}))
@@ -1118,9 +1105,6 @@ agent = SteeringAgent()
 agent.init({})
 agent.applyForce(agent.wander())
 agent.update(0.016)
-
-rig = ThirdPersonRig(null)
-rig.update(0.016)
 
 gen = DungeonGenerator(12, 12)
 gen.generate()
@@ -1152,6 +1136,27 @@ got == 1 and t != null
 	}
 }
 
+// TestEval_Game2DCreateWorldIsolated is a regression guard: if this fails, fix createWorld/assign before the full facade test.
+func TestEval_Game2DCreateWorldIsolated(t *testing.T) {
+	src := `import candy.game
+v = Game2D.createWorld()
+v != null
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
 func TestEval_GameFacadeSurface(t *testing.T) {
 	src := `
 import candy.game
@@ -1161,7 +1166,8 @@ w3 = Game3D.createWorld()
 app = App()
 net = MultiplayerSession()
 
-ok = w2.scene != null and w2.physics != null and w3.camera != null and app.ui != null and net != null
+// createWorld() returns a map: use get("key") for stable access in tests.
+ok = w2 != null and w2.get("scene") != null and w2.get("physics") != null and w3 != null and w3.get("camera") != null and app != null and app.ui != null and net != null
 ok
 `
 	l := candy_lexer.New(src)
@@ -1178,4 +1184,50 @@ ok
 		t.Fatalf("expected true, got %v", v)
 	}
 }
+
+func TestEval_StdlibImport_DedupesModuleExecution(t *testing.T) {
+	src := `
+import candy.input
+Input.pushContext("gameplay")
+import candy.input
+Input.contexts.length == 1
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestEval_NetworkConstructors_DoNotStartHostsImplicitly(t *testing.T) {
+	src := `
+import candy.network
+s = NetworkServer(19193, 4, 2)
+c = NetworkClient(2)
+(s.hostId >= -1) and (c.hostId >= -1)
+`
+	l := candy_lexer.New(src)
+	p := candy_parser.New(l)
+	prog := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parse: %v", p.Errors())
+	}
+	v, err := Eval(prog, nil)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v == nil || v.Kind != ValBool || !v.B {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+
 

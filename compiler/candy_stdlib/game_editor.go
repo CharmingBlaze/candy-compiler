@@ -34,8 +34,8 @@ object Editor {
 }
 
 object Gizmos {
-    fun drawLine(start, end, col = "red") {
-        drawLine3D(start, end, col)
+    fun drawLine(start, endPt, col = "red") {
+        drawLine3D(start, endPt, col)
     }
     
     fun drawSphere(pos, radius, col = "green") {

@@ -90,7 +90,7 @@ class Tilemap extends Entity2D {
     var data = []
     var width = 0
     var height = 0
-    var layers = {"base": {"visible": true, "data": []}}
+    var layers = {}
 
     fun init(path: String = "", w = 0, h = 0, ts = 32) {
         if path != "" and fileExists(path) {
@@ -99,6 +99,10 @@ class Tilemap extends Entity2D {
         width = w
         height = h
         tileSize = ts
+        var baseLayer = {}
+        baseLayer["visible"] = true
+        baseLayer["data"] = []
+        layers["base"] = baseLayer
     }
 
     fun draw() {
@@ -182,15 +186,15 @@ class ParticleSystem2D extends Entity2D {
             emit()
             i += 1
         }
-        var next = []
+        var particlesNext = []
         for p in particles {
             p.life = p.life - dt
             if p.life <= 0 { continue; }
             p.pos.x = p.pos.x + p.vel.x * dt
             p.pos.y = p.pos.y + p.vel.y * dt
-            next.add(p)
+            particlesNext.add(p)
         }
-        particles = next
+        particles = particlesNext
     }
 
     fun draw() {

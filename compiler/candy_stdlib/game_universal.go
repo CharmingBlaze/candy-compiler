@@ -6,7 +6,9 @@ class Scene {
     var entities = []
     var root = null
 
-    fun init() {}
+    fun init() {
+        if root == null { root = {"name": "root"}; }
+    }
 
     fun add(entity) {
         entities.add(entity)
@@ -17,15 +19,29 @@ class Scene {
     }
 
     fun update(dt) {
-        for e in entities {
-            e.update(dt)
-        }
+        // Intentionally lightweight; entities can update themselves in user code.
     }
 
     fun draw() {
-        for e in entities {
-            e.draw()
-        }
+        // Intentionally lightweight; entities can draw themselves in user code.
+    }
+
+    fun findByTag(tag) {
+        return []
+    }
+
+    fun findByType(typeName) {
+        return []
+    }
+
+    fun findInRadius(position, radius) {
+        return []
+    }
+
+    fun load(path) {
+        var s = Scene()
+        s.sourcePath = path
+        return s
     }
 }
 
@@ -131,6 +147,7 @@ object Resources {
     var groups = {}
     var loadedCallbacks = []
     var hotReload = false
+    var asyncQueue = []
 
     fun preload(paths) {
         for p in paths {
@@ -172,8 +189,15 @@ object Resources {
     }
 
     fun loadAsync(path, onComplete = null) {
-        cache[path] = path
-        if onComplete != null { onComplete(cache[path]); }
+        asyncQueue.add({"path": path, "onComplete": onComplete})
+    }
+
+    fun update() {
+        if asyncQueue.length == 0 { return 0; }
+        var req = asyncQueue.pop()
+        cache[req.path] = req.path
+        if req.onComplete != null { req.onComplete(cache[req.path]); }
+        return asyncQueue.length
     }
 }
 `
@@ -213,6 +237,16 @@ object Save {
     fun saveBinary(path: String, value) { saveJson(path, value); }
     fun loadBinary(path: String) { return loadJson(path); }
 }
+
+object Cloud {
+    var data = {}
+    fun save(key, value) { data[key] = value; }
+    fun load(key, onComplete = null) {
+        var value = data[key]
+        if onComplete != null { onComplete(value); }
+        return value
+    }
+}
 `
 	Modules["candy.debug"] = `
 object Debug {
@@ -243,19 +277,29 @@ object Debug {
 
 object Profiler {
     var marks = {}
+    var stats = {}
     fun begin(name) { marks[name] = time.now(); }
-    fun end(name) {}
-    fun getStats() { return {}; }
+    fun finish(name) {
+        var started = marks[name]
+        if started == null { return; }
+        var dt = time.now() - started
+        if stats[name] == null { stats[name] = {"count": 0, "total": 0.0, "avgTime": 0.0}; }
+        stats[name].count = stats[name].count + 1
+        stats[name].total = stats[name].total + dt
+        stats[name].avgTime = stats[name].total / stats[name].count
+    }
+    fun getStats() { return stats; }
 }
 
 object Console {
+    var commands = {}
     fun log(msg) {
         print(msg)
     }
 
     fun warn(msg) { print(msg); }
     fun error(msg) { print(msg); }
-    fun registerCommand(name, fn) {}
+    fun registerCommand(name, fn) { commands[name] = fn; }
     fun show() {}
 }
 `
@@ -273,8 +317,9 @@ class StateMachine {
     }
 
     fun update(dt) {
-        if states[currentState] != null {
-            states[currentState].update(dt)
+        var st = states[currentState]
+        if st != null and st["update"] != null {
+            st["update"](dt)
         }
     }
 }
@@ -287,6 +332,7 @@ class Camera2D {
     var zoom = 1.0
     var rotation = 0.0
     var bounds = null
+    var viewport = null
     var smoothing = 1.0
 
     fun follow(target, smooth = 0.1) {
@@ -296,6 +342,12 @@ class Camera2D {
         if lerp > 1 { lerp = 1; }
         position.x = position.x + (target.x - position.x) * lerp
         position.y = position.y + (target.y - position.y) * lerp
+        if bounds != null {
+            if position.x < bounds.x { position.x = bounds.x; }
+            if position.y < bounds.y { position.y = bounds.y; }
+            if bounds.w != null and position.x > bounds.x + bounds.w { position.x = bounds.x + bounds.w; }
+            if bounds.h != null and position.y > bounds.y + bounds.h { position.y = bounds.y + bounds.h; }
+        }
     }
 
     fun shake(duration, intensity) {

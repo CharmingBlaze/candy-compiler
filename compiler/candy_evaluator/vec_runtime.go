@@ -392,6 +392,8 @@ func builtinInputMap(args []*Value) (*Value, error) {
 		"type":    {Kind: ValString, Str: "InputMap"},
 		"actions": {Kind: ValMap, StrMap: map[string]Value{}},
 		"axes2d":  {Kind: ValMap, StrMap: map[string]Value{}},
+		"axes1d":  {Kind: ValMap, StrMap: map[string]Value{}},
+		"contexts": {Kind: ValArray, Elems: []Value{}},
 	}}, nil
 }
 

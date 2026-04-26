@@ -2,8 +2,6 @@ package candy_stdlib
 
 func init() {
 	Modules["candy.proc"] = `
-import candy.math
-
 object Noise {
     fun perlin(x, y = 0.0, z = 0.0) {
         return noise(x, y, z)
@@ -27,13 +25,14 @@ object Noise {
 class DungeonGenerator {
     var width = 50
     var height = 50
-    var map = []
+    var grid = []
     
     fun init(w = 50, h = 50) {
         width = w
         height = h
-        map = array(width * height)
-        for i in 0..(width * height) { map[i] = 1; } // 1 = wall
+        var wh = width * height
+        grid = array(wh)
+        for i in 0..wh { grid[i] = 1; } // 1 = wall
     }
     
     fun generate() {
@@ -51,14 +50,14 @@ class DungeonGenerator {
     fun carveRoom(x, y, w, h) {
         for iy in y..(y + h) {
             for ix in x..(x + w) {
-                map[iy * width + ix] = 0 // 0 = floor
+                grid[iy * width + ix] = 0 // 0 = floor
             }
         }
     }
     
     fun getTile(x, y) {
         if x < 0 or x >= width or y < 0 or y >= height { return 1; }
-        return map[y * width + x]
+        return grid[y * width + x]
     }
 }
 `
